@@ -49,6 +49,8 @@
 
 `src/AssemblyInfo.cs` 是 EXE 版本來源。沒有正式發行要求時，不自行建立版本標籤或把 `[Unreleased]` 宣稱為已發布版本。
 
+發行固定使用 `release.ps1 -Version <major.minor.patch>`，產物放 `dist/releases/v<版本>/`；EXE 產品版本、四段式檔案／manifest 版本、Changelog 與 `v<版本>` 標籤必須一致。`.github/workflows/release.yml` 在版本標籤推送後重新建置並發布預發行附件。尚未完成實機驗收時，不移除預發行標示。公開狀態是使用者指定的設定，不擅自改回私人。
+
 提交訊息採 `type: 簡短說明`，type 使用 `feat`、`fix`、`docs`、`test`、`build`、`chore`。不可 force push、改寫歷史或刪除遠端分支來簡化工作。建立／推送儲存庫、發布 Release 及改公開狀態依使用者授權辦理。
 
 交付時說明改了什麼、測了什麼、哪些實機項目尚未驗證；不要聲稱沒有執行過的檢查已通過。新 session 不依賴聊天紀錄猜測專案狀態，應以這些固定文件和實際程式為準。

@@ -2,6 +2,8 @@
 
 Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
 
+**下載：[v0.1.0 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.1.0)**。可直接下載 EXE，或下載 Windows 壓縮包。需要 .NET Framework 4.8 及管理員權限。
+
 ![首次設定示範畫面](docs/preview.png)
 
 ## 第一階段功能
@@ -68,6 +70,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 輸出為 `dist/NetworkRecovery.exe` 及 SHA-256 摘要。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。目前的 EXE 尚未做發行者數位簽章。
 
+維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.0` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。獲得發行授權後推送對應的 `v<版本>` 標籤，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
+
 執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML 與密碼驗證，不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
 ## 專案目錄與 GitHub
@@ -81,6 +85,7 @@ CHANGELOG.md             依版本記錄變更
 CONTRIBUTING.md          開發、檢查與提交方式
 SECURITY.md              密碼、權限與安全回報
 build.ps1                本機建置指令
+release.ps1              驗證版本及準備發行附件
 NetworkRecovery.csproj   Visual Studio 專案
 legacy/                  早期腳本與本機診斷紀錄，僅留在本機
 dist/                    建置產物
@@ -88,7 +93,7 @@ dist/                    建置產物
 
 `legacy/` 含這台電腦的舊設定與紀錄，已加入 `.gitignore`。**不要使用網頁上傳整個資料夾來繞過忽略規則。** 可改用提供的 `dist/NetworkRecovery-source.zip`，該壓縮檔只包含可分享的原始碼與說明，不含舊設定或紀錄。
 
-儲存庫：[kay786-003/network-recovery](https://github.com/kay786-003/network-recovery)。原始碼不包含 `dist/` 產物；可自行建置，或從成功的 GitHub Actions 執行紀錄取得 Windows 建置附件。尚未選定開源授權，沒有 LICENSE 不代表可任意再授權或散布。
+公開儲存庫：[kay786-003/network-recovery](https://github.com/kay786-003/network-recovery)。EXE 與壓縮包放在 [Releases](https://github.com/kay786-003/network-recovery/releases)，不放進 Git 原始碼歷史；也可自行建置。尚未選定開源授權，沒有 LICENSE 不代表可任意再授權或散布。
 
 本機驗證範圍與後續驗收項目見 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
@@ -110,4 +115,4 @@ dist/                    建置產物
 
 ## 版本與後續工作
 
-目前 EXE 版本為 `0.1.0.0`，仍屬第一階段、未正式發行。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。
+目前 GitHub 預發行版本為 `v0.1.0`，EXE 產品版本為 `0.1.0`、檔案版本為 `0.1.0.0`，仍屬第一階段。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。
