@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    {
+      "path": "AGENTS.md",
+      "title": "Agent 工作規範",
+      "sections": ["適用範圍與閱讀順序", "固定目錄與文件", "技術與行為契約", "密碼、權限與實機操作", "變更與驗證流程", "版本、提交與交付"]
+    },
+    {
+      "path": "README.md",
+      "title": "Network Recovery · 連線守護",
+      "sections": ["第一階段功能", "使用", "第一階段的固定流程", "Wi-Fi 與系統支援", "安裝位置", "建置", "專案目錄與 GitHub", "文件索引與開發規範", "版本與後續工作"]
+    },
+    {
+      "path": "CHANGELOG.md",
+      "title": "Changelog",
+      "sections": ["[Unreleased]"],
+      "allowVersionSections": true,
+      "subsectionsPerVersion": ["Added", "Changed", "Fixed", "Security"]
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "title": "貢獻指南",
+      "sections": ["開始之前", "開發環境", "變更流程", "必要檢查", "提交與合併", "文件格式"]
+    },
+    {
+      "path": "SECURITY.md",
+      "title": "安全說明",
+      "sections": ["回報問題", "密碼與本機資料", "權限與系統操作", "驗證與發行限制"]
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "title": "第一階段架構",
+      "sections": ["設定介面", "Windows 網路整合", "監控與安裝", "Windows 官方參考"]
+    },
+    {
+      "path": "docs/VERIFICATION.md",
+      "title": "第一階段驗證",
+      "sections": ["使用者驗收"]
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "title": "開發路線圖",
+      "sections": ["目前狀態", "第一階段", "第二階段", "開始下一項工作的條件"]
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "title": "架構決策",
+      "sections": ["記錄格式", "決策紀錄"]
+    }
+  ]
+}

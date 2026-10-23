@@ -1,0 +1,25 @@
+name: Build Windows application
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate canonical documentation
+        shell: powershell
+        run: .\tests\documentation.ps1
+      - name: Compile application
+        shell: powershell
+        run: .\build.ps1
+      - name: Validate Wi-Fi profile generation
+        shell: powershell
+        run: .\tests\run.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NetworkRecovery-windows
+          path: dist/*

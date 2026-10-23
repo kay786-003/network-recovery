@@ -1,0 +1,113 @@
+# Network Recovery · 連線守護
+
+Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
+
+![首次設定示範畫面](docs/preview.png)
+
+## 第一階段功能
+
+- 列出本機網卡，包括停用、隱藏、VPN 和虛擬網卡，讓使用者選擇一張。
+- Wi-Fi 網卡可選擇一個可用或已儲存的 Wi-Fi，並啟用 Windows 自動連線。
+- 已儲存的 Wi-Fi 重用 Windows 設定；新 Wi-Fi 會要求密碼。
+- 密碼輸入錯誤時，可重新掃描並勾選「更新已儲存的密碼」後再試；啟用前會確認所選 Wi-Fi 已連線。
+- 密碼只透過 Windows WLAN API 傳給 Windows，不寫入應用設定、紀錄、命令列或專案。
+- 單一 EXE，開啟時要求管理員權限。啟用後，即使關閉視窗、登出或重新開機，也由 Windows 排程在背景執行。
+- 可在應用內停止監控。
+
+本階段使用一張網卡、一個 Wi-Fi。多個 Wi-Fi 的優先順序與可調整的時間設定留待第二階段。
+
+## 使用
+
+1. 建置完成後執行 `dist/NetworkRecovery.exe`，或解壓縮 Windows 應用套件後執行其中的 EXE，核准 Windows 管理員權限提示。
+2. 選擇實際用來上網的網卡。只開啟視窗不會啟用監控。
+3. 若選 Wi-Fi，勾選重新連線並選擇 Wi-Fi。尚未儲存的網路會出現密碼欄位。
+4. 按「儲存並啟用」。Wi-Fi 設定會交給 Windows，監控會安裝為本機的背景排程。
+5. 關閉視窗即可。之後可重新開啟 EXE 調整網卡，或按「停止監控」。
+
+啟用時會依所選 Wi-Fi 送出連線要求；若切換網路，遠端連線可能短暫中斷。自動重新啟動會強制關閉程式，未儲存的工作可能遺失。
+
+## 第一階段的固定流程
+
+| 情況 | 動作 |
+| --- | --- |
+| 平常持續無法上網 3 分鐘 | 重啟選定網卡，並依選擇重新連線 Wi-Fi |
+| 修復完成後再等 60 秒仍無法上網 | 重新啟動電腦 |
+| 開機後持續無法上網 | 前 5 分鐘觀察連線；等待結束後觸發修復，再等 60 秒決定是否重新啟動 |
+
+檢查的是多個外部服務的實際回應，因此 Wi-Fi 顯示已連線卻無法上網，也會觸發流程。間隔有數秒的檢測及 Windows 操作延遲。沒有每小時／每天的重啟次數限制。
+
+## Wi-Fi 與系統支援
+
+- Windows、.NET Framework 4.8。`build.ps1` 使用 Windows 隨附的 Framework C# 編譯器，不需要安裝 .NET SDK 或 NuGet 套件。
+- 新連線支援開放網路、WPA2-Personal AES，以及系統與網卡支援的 WPA3-Personal SAE。
+- 企業／802.1X、WEP、特殊驗證或公司原則管理的連線，請先在 Windows 完成設定，再選擇已儲存的連線。本工具不建立企業憑證或登入設定。
+- 背景監控以 SYSTEM 執行，需要所有使用者可用的 Wi-Fi 設定。僅限單一使用者的連線會顯示處理說明，不會直接覆寫。
+- Windows 若限制 Wi-Fi 掃描的位置權限，請在「隱私權與安全性 → 位置」允許桌面應用存取；公司政策可能需要由管理員處理。
+- 路由器、電信線路、登入網頁或 VPN 服務本身故障，未必能透過重啟網卡或電腦排除。
+
+## 安裝位置
+
+| 用途 | 位置 |
+| --- | --- |
+| 已安裝程式 | `%ProgramFiles%\NetworkRecovery\NetworkRecovery.exe` |
+| 設定 | `%ProgramData%\NetworkRecovery\config.xml` |
+| 紀錄（UTC 時間） | `%ProgramData%\NetworkRecovery\events.log` |
+| Windows 工作排程名稱 | `NetworkRecovery Monitor` |
+
+應用檔案與設定僅供管理員及 SYSTEM 修改。設定檔只有網卡識別碼、Wi-Fi 設定名稱及時間，沒有 Wi-Fi 密碼。
+
+本專案由早期的 PowerShell 監控改寫而來。若本機有舊排程 `Codex Network Recovery`，只有按下「儲存並啟用」後才會切換到新版；單純執行或預覽 EXE 不會更動舊監控。
+
+## 建置
+
+在專案資料夾執行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+```
+
+輸出為 `dist/NetworkRecovery.exe` 及 SHA-256 摘要。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。目前的 EXE 尚未做發行者數位簽章。
+
+執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML 與密碼驗證，不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
+
+## 專案目錄與 GitHub
+
+```text
+src/                     應用程式原始碼與管理員權限 manifest
+docs/                    操作與驗證資料
+.github/workflows/       GitHub Actions 建置工作
+AGENTS.md                Agent 的固定工作規範與閱讀順序
+CHANGELOG.md             依版本記錄變更
+CONTRIBUTING.md          開發、檢查與提交方式
+SECURITY.md              密碼、權限與安全回報
+build.ps1                本機建置指令
+NetworkRecovery.csproj   Visual Studio 專案
+legacy/                  早期腳本與本機診斷紀錄，僅留在本機
+dist/                    建置產物
+```
+
+`legacy/` 含這台電腦的舊設定與紀錄，已加入 `.gitignore`。**不要使用網頁上傳整個資料夾來繞過忽略規則。** 可改用提供的 `dist/NetworkRecovery-source.zip`，該壓縮檔只包含可分享的原始碼與說明，不含舊設定或紀錄。
+
+儲存庫：[kay786-003/network-recovery](https://github.com/kay786-003/network-recovery)。原始碼不包含 `dist/` 產物；可自行建置，或從成功的 GitHub Actions 執行紀錄取得 Windows 建置附件。尚未選定開源授權，沒有 LICENSE 不代表可任意再授權或散布。
+
+本機驗證範圍與後續驗收項目見 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
+
+## 文件索引與開發規範
+
+| 固定路徑 | 用途 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | 每個新 Agent session 必讀的範圍、契約及驗證規則 |
+| [CHANGELOG.md](CHANGELOG.md) | 開發與發行變更，未發行內容放 `[Unreleased]` |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 環境、修改、測試與提交流程 |
+| [SECURITY.md](SECURITY.md) | 密碼、權限與安全回報方式 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 原始碼職責、背景監控及 Windows 整合 |
+| [docs/VERIFICATION.md](docs/VERIFICATION.md) | 已完成的驗證及仍待實機驗收的項目 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 第一階段狀態與第二階段範圍 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 只追加、不覆寫歷史的架構決策 |
+| [docs/documentation-schema.json](docs/documentation-schema.json) | 正式文件的檔名、大小寫及章節順序 |
+
+文件不可任意改名或建立重複副本。執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\documentation.ps1` 檢查格式；GitHub Actions 也會執行相同檢查。
+
+## 版本與後續工作
+
+目前 EXE 版本為 `0.1.0.0`，仍屬第一階段、未正式發行。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。

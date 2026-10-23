@@ -1,0 +1,23 @@
+# Old local scripts and diagnostics contain this computer's private settings.
+legacy/
+work/
+bin/
+obj/
+dist/
+*.user
+*.suo
+*.log
+config.xml
+restart-test*.json
+# Credentials, local machine state and generated diagnostics.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.tmp
+*.bak
+*-status.txt
+diagnostics*.txt
