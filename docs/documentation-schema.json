@@ -47,6 +47,11 @@
       "path": "docs/DECISIONS.md",
       "title": "架構決策",
       "sections": ["記錄格式", "決策紀錄"]
+    },
+    {
+      "path": "docs/ISSUES.md",
+      "title": "待修復問題清單",
+      "sections": ["使用方式", "開放項目"]
     }
   ]
 }

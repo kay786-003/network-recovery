@@ -27,6 +27,15 @@ namespace NetworkRecovery
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 bool preview = args.Length > 0 && args[0] == "--preview";
+                if (!preview && StartupPolicy.RequiresFirstRunConnectivityCheck(
+                    File.Exists(AppPaths.ConfigFile), AppInstaller.IsInstalled) &&
+                    !RecoveryEngine.InternetAvailable(5000))
+                {
+                    MessageBox.Show("首次設定前必須確認至少一個外部連線檢查服務可用。Microsoft、Cloudflare 與 Google 目前皆無成功回應。請確認網路、Proxy 或防火牆設定後再重新執行。程式將結束。",
+                        "Network Recovery", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Environment.ExitCode = 2;
+                    return;
+                }
                 if (preview)
                 {
                     if (args.Length < 2) throw new ArgumentException("Preview output path required.");

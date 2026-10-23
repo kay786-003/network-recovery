@@ -6,15 +6,16 @@
 
 ### Added
 
-無。
+- 首次設定前檢查外網探測服務；全部無回應時提示使用者並結束程式。
+- 新增待修復問題清單，記錄外網探測、簽章及實機驗收待辦。
 
 ### Changed
 
-無。
+- README 明列 Windows 10/11、.NET Framework 4.8 Runtime、PowerShell/NetAdapter 前置條件，並連結 Microsoft 官方下載頁。
 
 ### Fixed
 
-無。
+- 已有設定的互動啟動不再同步查詢背景排程，避免不必要的啟動延遲。
 
 ### Security
 
