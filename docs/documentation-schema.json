@@ -41,7 +41,7 @@
     {
       "path": "docs/ROADMAP.md",
       "title": "開發路線圖",
-      "sections": ["目前狀態", "第一階段", "第二階段", "開始下一項工作的條件"]
+      "sections": ["目前狀態", "第一階段", "第二階段", "第三階段", "開始下一項工作的條件"]
     },
     {
       "path": "docs/DECISIONS.md",
