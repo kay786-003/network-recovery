@@ -11,8 +11,8 @@ $changelog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'CHANGELOG.md') -
 $pattern = '(?ms)^## \[' + [regex]::Escape($Version) + '\] - (\d{4}-\d{2}-\d{2})\r?\n(.*?)(?=^## |\z)'
 $entry = [regex]::Match($changelog, $pattern)
 if (-not $entry.Success) { throw 'A dated changelog entry is required for the release version.' }
-& (Join-Path $PSScriptRoot 'tests\run.ps1')
 & (Join-Path $PSScriptRoot 'package.ps1')
+& (Join-Path $PSScriptRoot 'tests\run.ps1')
 $folder = Join-Path $PSScriptRoot ('dist\releases\' + $tag)
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 $assets = @(
@@ -34,7 +34,7 @@ $notes = @(
     '',
     '## Validation and limitations',
     '',
-    'Build, canonical-document checks and 12 isolated Wi-Fi XML/input tests passed. Read-only adapter/Wi-Fi checks were completed on the development machine.',
+    'Build, canonical-document checks, isolated Wi-Fi/input checks, a read-only missing-task regression check and demo-only UI layout checks passed. The installed-task status check is run only when elevated. Read-only adapter/Wi-Fi checks were completed on the development machine.',
     'Full end-to-end network repair and reboot testing of this EXE is still pending. The executable is unsigned. Automatic restarts can close unsaved work.',
     '',
     '## Downloads',

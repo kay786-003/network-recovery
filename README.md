@@ -2,7 +2,7 @@
 
 Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
 
-**下載：[v0.1.0 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.1.0)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
+**下載：[v0.1.1 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.1.1)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
 
 ![首次設定示範畫面](docs/preview.png)
 
@@ -74,7 +74,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 輸出為 `dist/NetworkRecovery.exe` 及 SHA-256 摘要。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。目前的 EXE 尚未做發行者數位簽章。
 
-維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.0` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。獲得發行授權後推送對應的 `v<版本>` 標籤，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
+維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.1` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
 
 執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML、密碼與啟動策略，唯讀查詢工作排程器，並短暫開啟示範視窗檢查按鈕遮擋與縮放（請先執行 build.ps1），不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
@@ -120,4 +120,4 @@ dist/                    建置產物
 
 ## 版本與後續工作
 
-目前 GitHub 預發行版本為 `v0.1.0`，EXE 產品版本為 `0.1.0`、檔案版本為 `0.1.0.0`，仍屬第一階段。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。
+目前 GitHub 預發行版本為 `v0.1.1`，EXE 產品版本為 `0.1.1`、檔案版本為 `0.1.1.0`，仍屬第一階段。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。
