@@ -21,6 +21,12 @@ class NetworkingPureChecks {
   n.Auth=9; Assert(NetworkManager.BuildNewProfileXml(n,"x","sae").Contains("WPA3SAE"),"WPA3 type"); Reject(n,"");
   n.IsOpen=true;n.IsSupportedPersonal=false;Assert(!NetworkManager.BuildNewProfileXml(n,null,"open").Contains("keyMaterial"),"open has no password");
   n.SsidHex="GG";Reject(n,null);
-  Console.WriteLine("Passed "+passed+" isolated XML validation checks. No network APIs invoked.");
+  bool taskQueryCalled=false;
+  Assert(StartupPolicy.RequiresFirstRunConnectivityCheck(false,delegate { taskQueryCalled=true; return false; }),"first launch without setup checks connectivity");
+  taskQueryCalled=false;
+  Assert(!StartupPolicy.RequiresFirstRunConnectivityCheck(true,delegate { taskQueryCalled=true; return false; }),"saved setup skips first-run check");
+  Assert(!taskQueryCalled,"saved setup skips scheduler query");
+  Assert(!StartupPolicy.RequiresFirstRunConnectivityCheck(false,delegate { return true; }),"installed monitor skips first-run check");
+  Console.WriteLine("Passed "+passed+" isolated XML and startup-policy checks. No network APIs invoked.");
  }
 }

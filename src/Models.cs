@@ -23,4 +23,14 @@ namespace NetworkRecovery
         public static string ConfigFile { get { return Path.Combine(Data, "config.xml"); } }
         public static string LogFile { get { return Path.Combine(Data, "events.log"); } }
     }
+
+    public static class StartupPolicy
+    {
+        public static bool RequiresFirstRunConnectivityCheck(bool hasSavedConfiguration, Func<bool> isMonitorInstalled)
+        {
+            if (hasSavedConfiguration) return false;
+            if (isMonitorInstalled == null) throw new ArgumentNullException("isMonitorInstalled");
+            return !isMonitorInstalled();
+        }
+    }
 }

@@ -2,7 +2,7 @@
 
 Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
 
-**下載：[v0.1.0 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.1.0)**。可直接下載 EXE，或下載 Windows 壓縮包。需要 .NET Framework 4.8 及管理員權限。
+**下載：[v0.1.1 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.1.1)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
 
 ![首次設定示範畫面](docs/preview.png)
 
@@ -20,11 +20,13 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 
 ## 使用
 
-1. 建置完成後執行 `dist/NetworkRecovery.exe`，或解壓縮 Windows 應用套件後執行其中的 EXE，核准 Windows 管理員權限提示。
+1. 建置完成後執行 `dist/NetworkRecovery.exe`，或解壓縮 Windows 應用套件後執行其中的 EXE，核准 Windows 管理員權限提示。首次設定（尚無應用設定及監控工作）會先測試外網；Microsoft、Cloudflare、Google 三個檢查服務都沒有回應時，程式會提示並結束，請確認網路、Proxy 或防火牆後再執行。
 2. 選擇實際用來上網的網卡。只開啟視窗不會啟用監控。
 3. 若選 Wi-Fi，勾選重新連線並選擇 Wi-Fi。尚未儲存的網路會出現密碼欄位。
 4. 按「儲存並啟用」。Wi-Fi 設定會交給 Windows，監控會安裝為本機的背景排程。
 5. 關閉視窗即可。之後可重新開啟 EXE 調整網卡，或按「停止監控」。
+
+高 DPI 顯示會依 Windows 縮放比例調整；若視窗小於完整設定畫面，請使用水平／垂直捲軸存取下方按鈕。首次使用顯示「尚未安裝」是正常狀態，按「儲存並啟用」後才建立監控排程。
 
 啟用時會依所選 Wi-Fi 送出連線要求；若切換網路，遠端連線可能短暫中斷。自動重新啟動會強制關閉程式，未儲存的工作可能遺失。
 
@@ -40,7 +42,9 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 
 ## Wi-Fi 與系統支援
 
-- Windows、.NET Framework 4.8。`build.ps1` 使用 Windows 隨附的 Framework C# 編譯器，不需要安裝 .NET SDK 或 NuGet 套件。
+- 支援 Windows 10/11，需安裝 .NET Framework 4.8 Runtime。Windows 11 已包含相容的 .NET Framework 4.x；Windows 10 請先確認已安裝 4.8 或更新的 4.x Runtime。尚未安裝時，請使用 [Microsoft 官方 .NET Framework 4.8 Runtime 下載頁](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)，不需要安裝 Developer Pack。
+- 網卡列舉及修復使用 Windows PowerShell 5.1 的 NetAdapter 模組。Wi-Fi 掃描需要 WLAN AutoConfig；位置權限可能受 Windows 設定或公司原則限制。
+- `build.ps1` 使用 Windows 隨附的 Framework C# 編譯器，不需要安裝 .NET SDK 或 NuGet 套件。
 - 新連線支援開放網路、WPA2-Personal AES，以及系統與網卡支援的 WPA3-Personal SAE。
 - 企業／802.1X、WEP、特殊驗證或公司原則管理的連線，請先在 Windows 完成設定，再選擇已儲存的連線。本工具不建立企業憑證或登入設定。
 - 背景監控以 SYSTEM 執行，需要所有使用者可用的 Wi-Fi 設定。僅限單一使用者的連線會顯示處理說明，不會直接覆寫。
@@ -70,9 +74,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 輸出為 `dist/NetworkRecovery.exe` 及 SHA-256 摘要。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。目前的 EXE 尚未做發行者數位簽章。
 
-維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.0` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。獲得發行授權後推送對應的 `v<版本>` 標籤，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
+維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.1` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
 
-執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML 與密碼驗證，不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
+執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML、密碼與啟動策略，唯讀查詢工作排程器，並短暫開啟示範視窗檢查按鈕遮擋與縮放（請先執行 build.ps1），不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
 ## 專案目錄與 GitHub
 
@@ -109,10 +113,11 @@ dist/                    建置產物
 | [docs/VERIFICATION.md](docs/VERIFICATION.md) | 已完成的驗證及仍待實機驗收的項目 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 第一階段狀態與第二階段範圍 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 只追加、不覆寫歷史的架構決策 |
+| [docs/ISSUES.md](docs/ISSUES.md) | 尚待修復或完成驗收的問題清單 |
 | [docs/documentation-schema.json](docs/documentation-schema.json) | 正式文件的檔名、大小寫及章節順序 |
 
 文件不可任意改名或建立重複副本。執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\documentation.ps1` 檢查格式；GitHub Actions 也會執行相同檢查。
 
 ## 版本與後續工作
 
-目前 GitHub 預發行版本為 `v0.1.0`，EXE 產品版本為 `0.1.0`、檔案版本為 `0.1.0.0`，仍屬第一階段。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。
+目前 GitHub 預發行版本為 `v0.1.1`，EXE 產品版本為 `0.1.1`、檔案版本為 `0.1.1.0`，仍屬第一階段。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。第二階段的多 Wi-Fi 與可調時間需求列於路線圖，只有使用者要求後才開始實作。

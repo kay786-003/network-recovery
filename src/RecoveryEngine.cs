@@ -369,9 +369,10 @@ namespace NetworkRecovery
                 service.Connect();
                 folder = service.GetFolder("\\");
                 try { task = folder.GetTask(name); }
-                catch (COMException ex)
+                // GetTask can map the COM missing-task HRESULT to FileNotFoundException.
+                catch (Exception ex)
                 {
-                    if (ex.ErrorCode == unchecked((int)0x80070002) || ex.ErrorCode == unchecked((int)0x8004130F))
+                    if (ex.HResult == unchecked((int)0x80070002) || ex.HResult == unchecked((int)0x8004130F))
                         return new TaskSnapshot();
                     throw;
                 }
