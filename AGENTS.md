@@ -49,6 +49,10 @@
 
 `src/AssemblyInfo.cs` 是 EXE 版本來源。沒有正式發行要求時，不自行建立版本標籤或把 `[Unreleased]` 宣稱為已發布版本。
 
+每次建置、打包或交付供使用者執行的 EXE，檔名必須包含版本號，格式為 `NetworkRecovery-v<產品版本>.exe`（例如 `NetworkRecovery-v0.1.0.exe`）；Windows ZIP 內的 EXE 也適用，不能只在 ZIP 名稱或外層資料夾標示版本。版本必須取自 `src/AssemblyInfo.cs` 的 `AssemblyInformationalVersion`，並核對成品的產品版本，禁止只改檔名冒充新版本。同一產品版本的未發行測試建置，檔名再加建置時間（例如 `NetworkRecovery-v0.1.0-dev-20261027-143000.exe`），避免不同修正版混淆；此後綴只識別建置，不代表正式發行或版本升級。
+
+修改建置／封裝流程時，必須同步檢查 `build.ps1`、`package.ps1`、`release.ps1`、測試、校驗清單及文件引用，確保交付的 EXE 與 ZIP 內容遵守上述命名。安裝到 Program Files 後供既有排程執行的內部檔名仍保留 `NetworkRecovery.exe`，不得因交付檔名改變而破壞排程路徑。交付時明列實際 EXE 檔名與位置。
+
 發行固定使用 `release.ps1 -Version <major.minor.patch>`，產物放 `dist/releases/v<版本>/`；EXE 產品版本、四段式檔案／manifest 版本、Changelog 與 `v<版本>` 標籤必須一致。`.github/workflows/release.yml` 在版本標籤推送後重新建置並發布預發行附件。尚未完成實機驗收時，不移除預發行標示。公開狀態是使用者指定的設定，不擅自改回私人。
 
 提交訊息採 `type: 簡短說明`，type 使用 `feat`、`fix`、`docs`、`test`、`build`、`chore`。不可 force push、改寫歷史或刪除遠端分支來簡化工作。建立／推送儲存庫、發布 Release 及改公開狀態依使用者授權辦理。
