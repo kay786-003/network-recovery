@@ -41,6 +41,7 @@ namespace NetworkRecovery
         bool populating;
         int selectionVersion;
         int networkRequest;
+        MonitorToolsForm toolsWindow;
 
         public MainForm(bool previewMode)
         {
@@ -82,7 +83,7 @@ namespace NetworkRecovery
             };
             FormClosed += delegate { statusTimer.Stop(); statusTimer.Dispose(); password.Clear(); };
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
-                if (busy) { e.Cancel = true; ShowNotice("正在完成監控設定，請稍候再關閉視窗。", false); }
+                if (busy || (toolsWindow != null && !toolsWindow.IsDisposed && toolsWindow.IsBusy)) { e.Cancel = true; ShowNotice("正在完成網路操作，請稍候再關閉視窗。", false); }
             };
         }
 
@@ -211,6 +212,14 @@ namespace NetworkRecovery
             settings.FlatAppearance.BorderSize = 0;
             settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
             footer.Controls.Add(settings, 2, 2);
+            Button tools = new Button { Text = "監控工具", Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, Margin = Padding.Empty };
+            tools.FlatAppearance.BorderSize = 0;
+            tools.Click += delegate {
+                if (busy) return;
+                if (toolsWindow == null || toolsWindow.IsDisposed) { toolsWindow = new MonitorToolsForm(preview); toolsWindow.Show(this); }
+                else toolsWindow.Activate();
+            };
+            footer.Controls.Add(tools, 1, 2);
             UpdateWifiControls();
         }
 
@@ -324,8 +333,11 @@ namespace NetworkRecovery
             ShowNotice("正在儲存設定並啟用背景監控…", false);
             try
             {
-                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi };
+                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi,
+                    WifiSsidHex = useWifi ? wifi.SsidHex : "" };
                 await Task.Run(delegate {
+                    using (ActionLease action = new ActionLease(1000))
+                    {
                     if (useWifi)
                     {
                         config.WifiProfileName = NetworkManager.ConfigureWifi(new Guid(adapter.Id), wifi, enteredPassword);
@@ -334,6 +346,7 @@ namespace NetworkRecovery
                             throw new InvalidOperationException("Wi-Fi 尚未成功連線，監控未切換。請確認訊號與密碼；若密碼錯誤，請重新掃描、選擇該 Wi-Fi，勾選『更新已儲存的密碼』後再試。" );
                     }
                     AppInstaller.Install(config);
+                    }
                 });
                 saved = config; password.Clear();
                 ShowNotice("已啟用。關閉這個視窗後，監控仍會在背景和每次開機後執行。", false);

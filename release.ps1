@@ -11,12 +11,12 @@ $changelog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'CHANGELOG.md') -
 $pattern = '(?ms)^## \[' + [regex]::Escape($Version) + '\] - (\d{4}-\d{2}-\d{2})\r?\n(.*?)(?=^## |\z)'
 $entry = [regex]::Match($changelog, $pattern)
 if (-not $entry.Success) { throw 'A dated changelog entry is required for the release version.' }
-& (Join-Path $PSScriptRoot 'package.ps1')
+& (Join-Path $PSScriptRoot 'package.ps1') -Release
 & (Join-Path $PSScriptRoot 'tests\run.ps1')
 $folder = Join-Path $PSScriptRoot ('dist\releases\' + $tag)
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 $assets = @(
-    @('NetworkRecovery.exe', ('NetworkRecovery-' + $tag + '.exe')),
+    @(('NetworkRecovery-' + $tag + '.exe'), ('NetworkRecovery-' + $tag + '.exe')),
     @('NetworkRecovery-windows.zip', ('NetworkRecovery-' + $tag + '-windows.zip')),
     @('NetworkRecovery-source.zip', ('NetworkRecovery-' + $tag + '-source.zip'))
 )

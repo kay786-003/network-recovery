@@ -4,6 +4,7 @@ using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
 using System.Diagnostics;
 using System.IO;
+using System.Management;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -42,66 +43,202 @@ namespace NetworkRecovery
             if (config == null || !Guid.TryParse(config.AdapterId, out adapterId) ||
                 config.OfflineSeconds < 5 || config.RepairSeconds < 5 || config.StartupGraceSeconds < 0)
                 throw new InvalidDataException("Missing or invalid monitor configuration.");
-            // Use monotonic time for intervals; changing Windows time cannot postpone recovery.
-            Stopwatch clock = Stopwatch.StartNew();
-            double initialUptime = GetTickCount64() / 1000.0;
-            double graceEnd = Math.Max(0, config.StartupGraceSeconds - initialUptime);
-            double? failureSince = null;
-            double? repairedAt = null;
-            bool everOnline = false;
-            WriteLog("Monitor started; offline=" + config.OfflineSeconds + "s, recovery=" +
-                config.RepairSeconds + "s, startup grace=" + config.StartupGraceSeconds + "s.");
+            string bootId = BootClock.Id;
+            double graceEnd = StartupPolicy.GraceDeadline(BootClock.Seconds, config.StartupGraceSeconds);
+            double? failureSince = null, repairedAt = null;
+            bool everOnline = false, targetAbsent = false;
+            double nextScan = 0;
+            int candidateIndex = 0;
+            string observationRevision = "";
+            string target = config.WifiSsidHex;
+            RestartBudget budget = LoadRestartBudget(bootId);
+            bool dirty = !SaveRestartBudget(budget, bootId);
+            WriteLog("Monitor started; offline=" + config.OfflineSeconds + "s, recovery=" + config.RepairSeconds + "s.");
             while (true)
             {
                 bool online = InternetAvailable(3000);
-                double now = clock.Elapsed.TotalSeconds;
-                if (online)
+                double now = BootClock.Seconds;
+                try
                 {
-                    if (failureSince.HasValue) WriteLog("Internet connection restored; recovery cancelled.");
-                    everOnline = true;
-                    failureSince = null;
-                    repairedAt = null;
-                }
-                else
-                {
-                    if (!failureSince.HasValue)
+                    using (ActionLease action = new ActionLease(1000))
                     {
-                        // A machine offline throughout its startup grace repairs at the end of
-                        // that grace, without adding another complete offline interval.
-                        failureSince = !everOnline && graceEnd > 0 ? -initialUptime : now;
-                        WriteLog("Internet probes failed; timing outage.");
-                    }
-                    bool startupOutage = !everOnline && graceEnd > 0;
-                    if (!repairedAt.HasValue && now >= graceEnd &&
-                        (startupOutage || now - failureSince.Value >= config.OfflineSeconds))
-                    {
-                        WriteLog("Repairing the configured network adapter.");
-                        try
+                        budget = LoadRestartBudget(bootId);
+                        PauseState pause = MonitorControl.Read();
+                        if (pause.Hours > 0 && pause.BootId != bootId)
                         {
-                            if (!NetworkManager.IsAdapterAvailable(adapterId))
-                                WriteLog("Configured adapter is unavailable; no other adapter will be changed.");
+                            pause.Anchor(bootId, BootClock.Seconds, DateTime.UtcNow);
+                            StateFile.Write(AppPaths.ControlFile, pause);
+                        }
+                        if (observationRevision != pause.ObservationRevision)
+                        {
+                            observationRevision = pause.ObservationRevision;
+                            failureSince = null; repairedAt = null; graceEnd = 0;
+                        }
+                        bool paused = MonitorControl.IsPaused(pause);
+                        if (!paused && budget.ResumeRevision != pause.Revision)
+                        {
+                            budget.ObserveInternet(true); // Explicit D0012 resume resets the window.
+                            budget.ResumeRevision = pause.Revision;
+                            dirty = true;
+                            failureSince = null; repairedAt = null; graceEnd = 0;
+                        }
+                        if (online)
+                        {
+                            if (failureSince.HasValue) WriteLog("Internet connection restored; recovery cancelled.");
+                            everOnline = true; failureSince = null; repairedAt = null; nextScan = 0; candidateIndex = 0;
+                            if (budget.HasHistory) { budget.ObserveInternet(true); dirty = true; }
+                        }
+                        if (dirty) dirty = !SaveRestartBudget(budget, bootId);
+                        if (paused)
+                        {
+                            failureSince = null; repairedAt = null;
+                            MonitorControl.Publish("已暫停", online);
+                        }
+                        else if (online) MonitorControl.Publish("正常", true);
+                        else
+                        {
+                            if (config.ReconnectWifi && now >= graceEnd && now >= nextScan)
+                            {
+                                bool previousAbsent = targetAbsent;
+                                targetAbsent = false;
+                                try
+                                {
+                                    NetworkManager.Scan(adapterId);
+                                    Thread.Sleep(2000);
+                                    List<WifiNetwork> networks = NetworkManager.GetNetworks(adapterId);
+                                    if (String.IsNullOrEmpty(target))
+                                    {
+                                        try { target = NetworkManager.GetProfileSsid(adapterId, config.WifiProfileName); }
+                                        catch (Exception ex) { WriteLog("Primary profile identity unavailable: " + ex.GetType().Name); }
+                                    }
+                                    targetAbsent = WifiRecoveryPolicy.TargetAbsent(networks, target, config.WifiProfileName);
+                                    List<string> candidates = WifiRecoveryPolicy.Candidates(networks, config.WifiProfileName);
+                                    if (previousAbsent && !targetAbsent)
+                                    {
+                                        candidateIndex = 0;
+                                        failureSince = BootClock.Seconds; repairedAt = null; graceEnd = 0;
+                                    }
+                                    if (candidates.Count > 0)
+                                    {
+                                        string profile = candidates[candidateIndex++ % candidates.Count];
+                                        NetworkManager.Connect(adapterId, profile); // Existing Windows credentials only.
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // A failed connection must not undo a successful absent-target scan.
+                                    WriteLog("Wi-Fi scan/reconnect failed: " + ex.GetType().Name);
+                                }
+                                nextScan = BootClock.Seconds + 30;
+                            }
+                            now = BootClock.Seconds;
+                            if (targetAbsent)
+                            {
+                                failureSince = null; repairedAt = null;
+                                MonitorControl.Publish("等待目標 Wi-Fi（持續掃描）", false);
+                            }
                             else
                             {
-                                NetworkManager.RestartAdapter(adapterId);
-                                if (config.ReconnectWifi && !String.IsNullOrWhiteSpace(config.WifiProfileName))
-                                    NetworkManager.Connect(adapterId, config.WifiProfileName);
-                                WriteLog("Adapter repair requested; waiting for Internet recovery.");
+                                if (!failureSince.HasValue) failureSince = !everOnline && graceEnd > 0 ? 0 : now;
+                                if (!repairedAt.HasValue && StartupPolicy.ShouldRepair(now, failureSince.Value,
+                                    graceEnd, everOnline, config.OfflineSeconds))
+                                {
+                                    MonitorControl.Publish("修復中", false);
+                                    try
+                                    {
+                                        NetworkManager.RestartAdapter(adapterId);
+                                        if (config.ReconnectWifi && !String.IsNullOrWhiteSpace(config.WifiProfileName))
+                                            NetworkManager.Connect(adapterId, config.WifiProfileName);
+                                    }
+                                    catch (Exception ex) { WriteLog("Adapter repair failed: " + ex.GetType().Name); }
+                                    repairedAt = BootClock.Seconds;
+                                }
+                                else if (repairedAt.HasValue && now - repairedAt.Value >= config.RepairSeconds)
+                                {
+                                    // Recheck after scan/connect operations; Wi-Fi alone never clears the budget.
+                                    if (InternetAvailable(3000))
+                                    {
+                                        budget.ObserveInternet(true); dirty = true;
+                                        failureSince = null; repairedAt = null; everOnline = true;
+                                    }
+                                    else
+                                    {
+                                        RequestRestart(budget, bootId, "修復後 " + config.RepairSeconds + " 秒仍無外網");
+                                        failureSince = BootClock.Seconds; repairedAt = null; graceEnd = 0;
+                                    }
+                                }
+                                else MonitorControl.Publish(repairedAt.HasValue ? "修復後觀察中" : "無外網，等待修復", false);
                             }
                         }
-                        catch (Exception ex) { WriteLog("Adapter repair failed: " + ex.GetType().Name); }
-                        repairedAt = clock.Elapsed.TotalSeconds;
-                    }
-                    else if (repairedAt.HasValue && now - repairedAt.Value >= config.RepairSeconds)
-                    {
-                        // The current iteration has just verified that external access still fails.
-                        WriteLog("Internet still unavailable after repair; requesting Windows restart.");
-                        int result = AppInstaller.ExecuteSystem("shutdown.exe", "/r /f /t 0", 10000);
-                        if (result != 0) WriteLog("Windows restart request failed, exit=" + result + ".");
-                        // Do not flood shutdown requests while Windows is closing or on error.
-                        Thread.Sleep(30000);
                     }
                 }
+                catch (Exception ex)
+                {
+                    // Invalid control state cannot accidentally resume destructive actions.
+                    WriteLog("Automatic actions deferred: " + ex.GetType().Name);
+                    MonitorControl.Publish("等待操作完成或檢查控制狀態", online);
+                }
                 Thread.Sleep(5000);
+            }
+        }
+
+        internal static RestartBudget LoadRestartBudget(string bootId)
+        {
+            try
+            {
+                AppInstaller.PrepareRestartHistory();
+                return new RestartBudget(RestartHistoryFile.Read(AppPaths.RestartHistoryFile), bootId, BootClock.Seconds, DateTime.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Restart history unavailable: " + ex.GetType().Name);
+                return RestartBudget.Blocked(BootClock.Seconds);
+            }
+        }
+
+        internal static bool RequestRestart(RestartBudget budget, string bootId, string reason)
+        {
+            try
+            {
+                return RestartRequest.Execute(delegate {
+                    if (budget.TryReserve(BootClock.Seconds)) return true;
+                    WriteLog("已達 4 小時重啟上限，改為修復網卡。"); return false;
+                }, delegate { return SaveRestartBudget(budget, bootId); },
+                delegate { WriteRequiredLog("準備重新啟動：" + reason); },
+                delegate {
+                    int result = AppInstaller.ExecuteSystem("shutdown.exe", "/r /f /t 0", 10000);
+                    if (result != 0) WriteLog("Windows restart request failed, exit=" + result + ".");
+                    return result;
+                });
+            }
+            catch (Exception ex) { WriteLog("Restart deferred: " + ex.GetType().Name); return false; }
+        }
+
+        internal static void WriteRequiredLog(string message)
+        {
+            AppInstaller.ProtectStatePath(AppPaths.LogFile);
+            using (FileStream stream = new FileStream(AppPaths.LogFile, FileMode.Append, FileAccess.Write, FileShare.Read))
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("o") + " " + message + Environment.NewLine);
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
+            }
+        }
+
+        private static bool SaveRestartBudget(RestartBudget budget, string bootId)
+        {
+            try
+            {
+                if (String.IsNullOrEmpty(bootId)) return false;
+                AppInstaller.PrepareRestartHistory();
+                RestartHistoryFile.Write(AppPaths.RestartHistoryFile,
+                    budget.Snapshot(bootId, GetTickCount64() / 1000.0, DateTime.UtcNow));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Cannot persist restart history; restart denied: " + ex.GetType().Name);
+                return false;
             }
         }
 
@@ -196,6 +333,7 @@ namespace NetworkRecovery
     {
         private const string TaskName = "NetworkRecovery Monitor";
         private const string LegacyTaskName = "Codex Network Recovery";
+        private const string TrayTaskName = "NetworkRecovery Tray";
         private static string InstalledExe { get { return Path.Combine(AppPaths.Root, "NetworkRecovery.exe"); } }
 
         public static AppConfig LoadConfig()
@@ -221,7 +359,7 @@ namespace NetworkRecovery
             using (Mutex setup = new Mutex(true, @"Global\NetworkRecoverySetupV1", out acquired))
             {
                 if (!acquired) throw new InvalidOperationException("另一個安裝程序正在執行，請稍後再試。");
-                try { InstallCore(config); }
+                try { using (ActionLease action = new ActionLease(1000)) InstallCore(config); }
                 finally { setup.ReleaseMutex(); }
             }
         }
@@ -236,6 +374,7 @@ namespace NetworkRecovery
             ValidateInstallPaths();
             TaskSnapshot previous = ReadTask(TaskName);
             TaskSnapshot legacy = ReadTask(LegacyTaskName);
+            TaskSnapshot tray = ReadTask(TrayTaskName);
             CreateProtectedDirectory(AppPaths.Root);
             CreateProtectedDirectory(AppPaths.Data);
             // Existing files can retain explicit write permissions after File.Copy overwrites.
@@ -243,6 +382,9 @@ namespace NetworkRecovery
             ProtectExistingFile(AppPaths.ConfigFile);
             ProtectExistingFile(AppPaths.LogFile);
             ProtectExistingFile(AppPaths.LogFile + ".1");
+            ProtectExistingFile(AppPaths.RestartHistoryFile);
+            ProtectExistingFile(AppPaths.ControlFile);
+            ProtectExistingFile(AppPaths.StatusFile);
             ValidateInstallPaths();
             string suffix = ".install-" + Guid.NewGuid().ToString("N");
             string stagedExe = InstalledExe + suffix;
@@ -252,8 +394,13 @@ namespace NetworkRecovery
             string taskXml = Path.Combine(AppPaths.Data, "task" + suffix + ".xml");
             string savedTask = taskXml + ".backup";
             string savedLegacyTask = taskXml + ".legacy-backup";
+            string trayXml = taskXml + ".tray";
+            string savedTrayTask = taskXml + ".tray-backup";
             bool copyExe = !String.Equals(Path.GetFullPath(Assembly.GetEntryAssembly().Location),
                 Path.GetFullPath(InstalledExe), StringComparison.OrdinalIgnoreCase);
+            // Settings opened by the tray can belong to its scheduler process tree.
+            // Re-saving settings from the installed binary must not end its own parent task.
+            bool updateTray = copyExe || !tray.Exists;
             bool hadExe = File.Exists(InstalledExe), hadConfig = File.Exists(AppPaths.ConfigFile);
             bool touched = false, legacyTouched = false, exeChanged = false, configChanged = false, preserveBackups = false;
             try
@@ -264,13 +411,18 @@ namespace NetworkRecovery
                 if (hadConfig) File.Copy(AppPaths.ConfigFile, savedConfig, true);
                 if (previous.Exists) File.WriteAllText(savedTask, previous.Xml, Encoding.Unicode);
                 if (legacy.Exists) File.WriteAllText(savedLegacyTask, legacy.Xml, Encoding.Unicode);
+                if (tray.Exists) File.WriteAllText(savedTrayTask, tray.Xml, Encoding.Unicode);
                 using (FileStream stream = File.Create(stagedConfig))
                     new XmlSerializer(typeof(AppConfig)).Serialize(stream, config);
                 File.WriteAllText(taskXml, BuildTaskXml(false), Encoding.Unicode);
                 ValidateTaskXml(taskXml);
+                string userSid = WindowsIdentity.GetCurrent().User.Value;
+                File.WriteAllText(trayXml, BuildTrayTaskXml(userSid, false), Encoding.Unicode);
+                ValidateTaskXml(trayXml, TrayTaskName, userSid, 3);
 
                 touched = true;
                 StopTask(TaskName);
+                if (updateTray) StopTask(TrayTaskName);
                 if (copyExe)
                 {
                     exeChanged = true;
@@ -279,6 +431,7 @@ namespace NetworkRecovery
                 configChanged = true;
                 File.Copy(stagedConfig, AppPaths.ConfigFile, true);
                 RequireSuccess(ExecuteSystem("schtasks.exe", "/Create /TN \"" + TaskName + "\" /XML \"" + taskXml + "\" /F", 20000), "無法建立監控排程");
+                if (updateTray) RequireSuccess(ExecuteSystem("schtasks.exe", "/Create /TN \"" + TrayTaskName + "\" /XML \"" + trayXml + "\" /F", 20000), "無法建立系統匣排程");
                 // The replacement is registered disabled, so legacy remains the sole active
                 // monitor until all setup work is ready. Only the final handover stops it.
                 legacyTouched = true;
@@ -286,6 +439,12 @@ namespace NetworkRecovery
                 RequireSuccess(ExecuteSystem("schtasks.exe", "/Change /TN \"" + TaskName + "\" /ENABLE", 15000), "無法啟用監控排程");
                 RequireSuccess(ExecuteSystem("schtasks.exe", "/Run /TN \"" + TaskName + "\"", 15000), "無法啟動監控排程");
                 WaitForRunning();
+                if (updateTray)
+                {
+                    RequireSuccess(ExecuteSystem("schtasks.exe", "/Change /TN \"" + TrayTaskName + "\" /ENABLE", 15000), "無法啟用系統匣排程");
+                    RequireSuccess(ExecuteSystem("schtasks.exe", "/Run /TN \"" + TrayTaskName + "\"", 15000), "無法啟動系統匣");
+                    WaitForRunning(TrayTaskName);
+                }
                 RecoveryEngine.WriteLog("Recovery task installed and running; previous monitor disabled.");
             }
             catch (Exception error)
@@ -293,6 +452,7 @@ namespace NetworkRecovery
                 if (!touched) throw;
                 List<string> failures = new List<string>();
                 TryRestore(delegate { StopTask(TaskName); }, "停止新監控", failures);
+                if (updateTray) TryRestore(delegate { StopTask(TrayTaskName); }, "停止新系統匣", failures);
                 if (exeChanged) TryRestore(delegate
                 {
                     if (hadExe) CopyWithRetry(savedExe, InstalledExe);
@@ -305,6 +465,7 @@ namespace NetworkRecovery
                 }, "還原設定", failures);
                 TryRestore(delegate { RestoreTask(TaskName, previous, taskXml); }, "還原原有監控", failures);
                 if (legacyTouched) TryRestore(delegate { RestoreTask(LegacyTaskName, legacy, taskXml, false); }, "還原舊版監控", failures);
+                if (updateTray) TryRestore(delegate { RestoreTask(TrayTaskName, tray, trayXml); }, "還原系統匣", failures);
                 preserveBackups = failures.Count > 0;
                 RecoveryEngine.WriteLog("Installation failed; rollback " + (preserveBackups ? "incomplete." : "completed."));
                 throw new InvalidOperationException("安裝失敗：" + error.Message +
@@ -312,11 +473,12 @@ namespace NetworkRecovery
             }
             finally
             {
-                foreach (string path in new[] { stagedExe, stagedConfig, taskXml }) SafeDelete(path);
+                foreach (string path in new[] { stagedExe, stagedConfig, taskXml, trayXml }) SafeDelete(path);
                 if (!preserveBackups)
                 {
                     SafeDelete(savedExe); SafeDelete(savedConfig);
                     SafeDelete(savedTask); SafeDelete(savedLegacyTask);
+                    SafeDelete(savedTrayTask);
                 }
             }
         }
@@ -324,12 +486,15 @@ namespace NetworkRecovery
         public static void Stop()
         {
             RequireAdministrator();
-            StopTask(TaskName);
+            using (ActionLease action = new ActionLease(1000)) StopTask(TaskName);
         }
 
         public static void Uninstall()
         {
             Stop();
+            StopTask(TrayTaskName);
+            if (ReadTask(TrayTaskName).Exists)
+                RequireSuccess(ExecuteSystem("schtasks.exe", "/Delete /TN \"" + TrayTaskName + "\" /F", 15000), "無法移除系統匣排程");
             int result = ExecuteSystem("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F", 15000);
             if (result != 0 && IsInstalled()) throw new InvalidOperationException("Could not remove recovery task.");
             // Retain config and logs for review. Never delete the running executable.
@@ -348,7 +513,7 @@ namespace NetworkRecovery
                 TaskSnapshot task = ReadTask(TaskName);
                 if (!task.Exists) return "尚未安裝";
                 if (!task.Enabled) return "監控已停止";
-                return task.Running ? "監控執行中" : "監控已啟用（等待執行）";
+                return task.Running ? MonitorControl.Describe() : "監控已啟用（等待執行）";
             }
             catch { return "無法讀取排程狀態"; }
         }
@@ -388,7 +553,7 @@ namespace NetworkRecovery
             }
         }
 
-        private static void ValidateTaskXml(string path)
+        private static void ValidateTaskXml(string path, string name = TaskName, string user = "SYSTEM", int logon = 5)
         {
             dynamic service = null, folder = null, result = null;
             try
@@ -397,7 +562,7 @@ namespace NetworkRecovery
                 service.Connect();
                 folder = service.GetFolder("\\");
                 // TASK_VALIDATE_ONLY (1) checks schema and settings without registering a task.
-                result = folder.RegisterTask(TaskName, File.ReadAllText(path), 1, "SYSTEM", null, 5, null);
+                result = folder.RegisterTask(name, File.ReadAllText(path), 1, user, null, logon, null);
             }
             finally
             {
@@ -422,15 +587,15 @@ namespace NetworkRecovery
             }
         }
 
-        private static void WaitForRunning()
+        private static void WaitForRunning(string name = TaskName)
         {
             Stopwatch wait = Stopwatch.StartNew();
             while (wait.ElapsedMilliseconds < 10000)
             {
-                if (ReadTask(TaskName).State == 4)
+                if (ReadTask(name).State == 4)
                 {
                     Thread.Sleep(1200);
-                    if (ReadTask(TaskName).State == 4) return;
+                    if (ReadTask(name).State == 4) return;
                 }
                 Thread.Sleep(200);
             }
@@ -519,6 +684,17 @@ namespace NetworkRecovery
                 "<WorkingDirectory>" + working + "</WorkingDirectory></Exec></Actions></Task>";
         }
 
+        internal static string BuildTrayTaskXml(string sid, bool enabled)
+        {
+            string xml = BuildTaskXml(enabled);
+            int start = xml.IndexOf("<Triggers>", StringComparison.Ordinal);
+            int end = xml.IndexOf("</Triggers>", StringComparison.Ordinal) + "</Triggers>".Length;
+            xml = xml.Substring(0, start) + "<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" +
+                System.Security.SecurityElement.Escape(sid) + "</UserId></LogonTrigger></Triggers>" + xml.Substring(end);
+            return xml.Replace("<UserId>S-1-5-18</UserId>", "<UserId>" + System.Security.SecurityElement.Escape(sid) +
+                "</UserId><LogonType>InteractiveToken</LogonType>").Replace("<Arguments>--monitor</Arguments>", "<Arguments>--tray</Arguments>");
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct FileHandleInfo
         {
@@ -551,6 +727,45 @@ namespace NetworkRecovery
             RejectReparsePath(AppPaths.ConfigFile, false);
             RejectReparsePath(AppPaths.LogFile, false);
             RejectReparsePath(AppPaths.LogFile + ".1", false);
+            RejectReparsePath(AppPaths.RestartHistoryFile, false);
+            RejectReparsePath(AppPaths.ControlFile, false);
+            RejectReparsePath(AppPaths.StatusFile, false);
+        }
+
+        internal static void PrepareRestartHistory()
+        {
+            ValidateInstallPaths();
+            CreateProtectedDirectory(AppPaths.Data);
+            ProtectExistingFile(AppPaths.RestartHistoryFile);
+        }
+
+        internal static void CheckStatePath(string path)
+        {
+            RejectReparsePath(AppPaths.Data, true);
+            RejectReparsePath(path, false);
+        }
+
+        internal static void ProtectStatePath(string path)
+        {
+            CheckStatePath(path);
+            CreateProtectedDirectory(AppPaths.Data);
+            ProtectExistingFile(path);
+        }
+
+        internal static void PreparePrivateBackup()
+        {
+            RejectReparsePath(AppPaths.Data, true);
+            CreateProtectedDirectory(AppPaths.Data);
+            RejectReparsePath(AppPaths.RepairBackup, true);
+            Directory.CreateDirectory(AppPaths.RepairBackup);
+            ApplyProtectedAcl(AppPaths.RepairBackup, true, false);
+        }
+
+        internal static void ProtectBackupFile(string path)
+        {
+            RejectReparsePath(AppPaths.RepairBackup, true);
+            RejectReparsePath(path, false);
+            if (File.Exists(path)) ApplyProtectedAcl(path, false, false);
         }
 
         private static void RejectReparsePath(string path, bool directory)
@@ -579,7 +794,7 @@ namespace NetworkRecovery
             if (File.Exists(path)) ApplyProtectedAcl(path, false);
         }
 
-        private static void ApplyProtectedAcl(string path, bool directory)
+        private static void ApplyProtectedAcl(string path, bool directory, bool readable = true)
         {
             // Open the object itself, never a reparse target. Excluding delete sharing
             // prevents renaming/replacing it between validation and the ACL write.
@@ -602,7 +817,7 @@ namespace NetworkRecovery
                 foreach (WellKnownSidType sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
                     security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
                         inheritance, PropagationFlags.None, AccessControlType.Allow));
-                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null),
+                if (readable) security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null),
                     FileSystemRights.ReadAndExecute, inheritance, PropagationFlags.None, AccessControlType.Allow));
                 // MAXIMUM_ALLOWED suppresses SetSecurityInfo propagation to existing children;
                 // only these specific objects change. Newly created files still inherit this DACL.

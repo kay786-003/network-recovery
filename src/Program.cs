@@ -26,6 +26,13 @@ namespace NetworkRecovery
                 }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                if (args.Length > 0 && args[0] == "--tray")
+                {
+                    bool created;
+                    using (Mutex tray = new Mutex(true, @"Local\NetworkRecoveryTrayV1", out created))
+                    { if (created) using (TrayContext context = new TrayContext()) Application.Run(context); }
+                    return;
+                }
                 bool preview = args.Length > 0 && args[0] == "--preview";
                 if (!preview && StartupPolicy.RequiresFirstRunConnectivityCheck(
                     File.Exists(AppPaths.ConfigFile), AppInstaller.IsInstalled) &&
