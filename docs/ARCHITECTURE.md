@@ -6,6 +6,8 @@
 
 `MainForm.cs` 負責選擇網卡、Wi-Fi、提示密碼及啟用／停止。網卡以 GUID 記錄，修復時不依賴會改名或重複的顯示名稱。選擇 Wi-Fi 之外的網卡時，Wi-Fi 區塊停用。掃描與安裝在背景執行，介面不會在處理期間被關閉；較舊的掃描結果不會覆寫較新的選擇。
 
+介面以 96 DPI 為設計基準，建立控制項時暫停版面配置後統一縮放；內容畫布保留縮放後最小尺寸，小螢幕透過捲軸操作。底部以 TableLayoutPanel 分隔狀態列與操作列，避免標籤的字體縮放擴大邊界而遮住按鈕。
+
 ## Windows 網路整合
 
 `Networking.cs` 以 `Get-NetAdapter -IncludeHidden` 列出網卡，透過 WLAN API 取得 Wi-Fi 清單、讀寫 Windows 連線設定及送出連線要求。新設定使用 `connectionMode=auto` 並建立為所有使用者可用的設定。只在記憶體中組合包含密碼的 XML，由 `WlanSetProfile` 交給 Windows 處理。
@@ -19,6 +21,8 @@
 應用透過工作排程以 SYSTEM 執行，開機觸發並定期補啟動；多重執行受排程與命名 Mutex 保護。不需要使用者保持登入或開啟設定視窗。
 
 所有可由 SYSTEM 執行的應用檔案都安裝在受保護的 Program Files 目錄，設定置於受保護的 ProgramData 目錄。標準使用者只可讀取，無法替換背景執行的程式或設定。
+
+排程讀取僅在 `GetTask` 邊界將 `0x80070002`／`0x8004130F` 視為不存在，涵蓋 COMException 與 Framework 映射出的 FileNotFoundException；服務連線、存取權限及其他 HRESULT 不視為未安裝。此讀取路徑同時用於狀態、安裝快照與停止／還原流程。
 
 ## Windows 官方參考
 

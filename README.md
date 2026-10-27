@@ -26,6 +26,8 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 4. 按「儲存並啟用」。Wi-Fi 設定會交給 Windows，監控會安裝為本機的背景排程。
 5. 關閉視窗即可。之後可重新開啟 EXE 調整網卡，或按「停止監控」。
 
+高 DPI 顯示會依 Windows 縮放比例調整；若視窗小於完整設定畫面，請使用水平／垂直捲軸存取下方按鈕。首次使用顯示「尚未安裝」是正常狀態，按「儲存並啟用」後才建立監控排程。
+
 啟用時會依所選 Wi-Fi 送出連線要求；若切換網路，遠端連線可能短暫中斷。自動重新啟動會強制關閉程式，未儲存的工作可能遺失。
 
 ## 第一階段的固定流程
@@ -74,7 +76,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.1.0` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。獲得發行授權後推送對應的 `v<版本>` 標籤，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
 
-執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML 與密碼驗證，不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
+執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML、密碼與啟動策略，唯讀查詢工作排程器，並短暫開啟示範視窗檢查按鈕遮擋與縮放（請先執行 build.ps1），不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
 ## 專案目錄與 GitHub
 

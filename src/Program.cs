@@ -43,7 +43,7 @@ namespace NetworkRecovery
                     {
                         form.Show(); Application.DoEvents();
                         using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(form.Width, form.Height))
-                        { form.DrawToBitmap(bitmap, form.ClientRectangle); bitmap.Save(args[1], System.Drawing.Imaging.ImageFormat.Png); }
+                        { form.DrawToBitmap(bitmap, new System.Drawing.Rectangle(System.Drawing.Point.Empty, bitmap.Size)); bitmap.Save(args[1], System.Drawing.Imaging.ImageFormat.Png); }
                         form.Close();
                     }
                     return;

@@ -16,6 +16,8 @@ namespace NetworkRecovery
         readonly Color muted = Color.FromArgb(99, 114, 134);
         readonly Color blue = Color.FromArgb(37, 99, 235);
         readonly bool preview;
+        readonly Panel content = new Panel();
+        Size contentMinimum;
         readonly ListView adapters = new ListView();
         readonly ComboBox networks = new ComboBox();
         readonly CheckBox reconnect = new CheckBox();
@@ -42,16 +44,24 @@ namespace NetworkRecovery
 
         public MainForm(bool previewMode)
         {
+            SuspendLayout();
             preview = previewMode;
             Text = "Network Recovery · 連線守護";
             Font = new Font("Microsoft JhengHei UI", 9F);
             BackColor = Color.FromArgb(244, 247, 251);
             ForeColor = ink;
             ClientSize = new Size(1080, 790);
-            MinimumSize = new Size(1096, 829);
+            MinimumSize = new Size(640, 480);
             StartPosition = FormStartPosition.CenterScreen;
+            AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
+            AutoScroll = true;
+            content.Size = ClientSize;
+            Controls.Add(content);
+            content.SuspendLayout();
             BuildLayout();
+            content.ResumeLayout(false);
+            ResumeLayout(false);
             adapters.SelectedIndexChanged += delegate { if (!populating) AdapterChanged(); };
             networks.SelectedIndexChanged += delegate { if (!loading) NetworkChanged(); };
             reconnect.CheckedChanged += delegate { UpdateWifiControls(); };
@@ -76,6 +86,34 @@ namespace NetworkRecovery
             };
         }
 
+        protected override void OnLoad(EventArgs e)
+        {
+            // Preserve the scaled design canvas and scroll on smaller desktops.
+            contentMinimum = content.Size;
+            float dpiScale = CurrentAutoScaleDimensions.Width / 96F;
+            adapters.Columns[0].Width = (int)(165 * dpiScale);
+            adapters.Columns[1].Width = (int)(90 * dpiScale);
+            adapters.Columns[2].Width = (int)(90 * dpiScale);
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
+            Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
+            ResizeContent();
+            base.OnLoad(e);
+        }
+
+        protected override void OnClientSizeChanged(EventArgs e)
+        {
+            base.OnClientSizeChanged(e);
+            ResizeContent();
+        }
+
+        void ResizeContent()
+        {
+            if (contentMinimum.IsEmpty) return;
+            content.Size = new Size(Math.Max(contentMinimum.Width, ClientSize.Width),
+                Math.Max(contentMinimum.Height, ClientSize.Height));
+        }
+
         Label TextLabel(Control parent, string text, int x, int y, int w, int h, float size, Color color, bool bold)
         {
             Label label = new Label { Text = text, Location = new Point(x, y), Size = new Size(w, h), ForeColor = color,
@@ -98,6 +136,7 @@ namespace NetworkRecovery
         {
             Panel brand = new Panel { BackColor = blue, Location = new Point(28, 27), Size = new Size(38, 38) };
             brand.Paint += delegate(object sender, PaintEventArgs e) {
+                e.Graphics.ScaleTransform(brand.ClientSize.Width / 38F, brand.ClientSize.Height / 38F);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 using (Pen p = new Pen(Color.White, 2F)) {
                     e.Graphics.DrawArc(p, 7, 7, 23, 23, 214, 112);
@@ -105,18 +144,18 @@ namespace NetworkRecovery
                 }
                 e.Graphics.FillEllipse(Brushes.White, 17, 25, 4, 4);
             };
-            Controls.Add(brand);
-            TextLabel(this, "NETWORK RECOVERY", 78, 26, 330, 25, 12F, ink, true);
-            TextLabel(this, "連線守護", 78, 52, 300, 20, 9F, muted, false);
-            Label tag = TextLabel(this, "管理員模式", 915, 36, 128, 28, 9F, blue, true);
+            content.Controls.Add(brand);
+            TextLabel(content, "NETWORK RECOVERY", 78, 26, 330, 25, 12F, ink, true);
+            TextLabel(content, "連線守護", 78, 52, 300, 20, 9F, muted, false);
+            Label tag = TextLabel(content, "管理員模式", 915, 36, 128, 28, 9F, blue, true);
             tag.TextAlign = ContentAlignment.MiddleCenter; tag.BackColor = Color.FromArgb(228, 237, 255);
             tag.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            TextLabel(this, "讓連線自行恢復。", 28, 88, 800, 39, 22F, ink, true);
-            TextLabel(this, "選擇要保護的網卡，設定斷網後的 Wi-Fi 重連方式。", 30, 136, 970, 26, 10F, muted, false);
+            TextLabel(content, "讓連線自行恢復。", 28, 88, 800, 39, 22F, ink, true);
+            TextLabel(content, "選擇要保護的網卡，設定斷網後的 Wi-Fi 重連方式。", 30, 136, 970, 26, 10F, muted, false);
 
             Card left = new Card { Location = new Point(28, 181), Size = new Size(420, 397), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             Card right = new Card { Location = new Point(464, 181), Size = new Size(588, 397), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            Controls.Add(left); Controls.Add(right);
+            content.Controls.Add(left); content.Controls.Add(right);
             TextLabel(left, "01  選擇網卡", 20, 20, 260, 30, 13F, ink, true);
             StyleButton(refreshAdapters, "重新整理", false); refreshAdapters.SetBounds(307, 18, 92, 33); left.Controls.Add(refreshAdapters);
             TextLabel(left, "所有網卡都會列出，包含 VPN 與虛擬網卡。", 20, 57, 380, 25, 9F, muted, false);
@@ -136,7 +175,7 @@ namespace NetworkRecovery
             networks.SetBounds(22, 136, 414, 32); networks.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; networks.DropDownStyle = ComboBoxStyle.DropDownList; right.Controls.Add(networks);
             StyleButton(refreshWifi, "重新掃描", false); refreshWifi.SetBounds(450, 133, 115, 35); refreshWifi.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(refreshWifi);
             wifiInfo.SetBounds(22, 182, 542, 40); wifiInfo.ForeColor = muted; wifiInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; right.Controls.Add(wifiInfo);
-            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.SetBounds(22, 226, 420, 22); passwordLabel.Font = new Font(Font, FontStyle.Bold); right.Controls.Add(passwordLabel);
+            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.SetBounds(22, 226, 300, 22); passwordLabel.Font = new Font(Font, FontStyle.Bold); right.Controls.Add(passwordLabel);
             replacePassword.Text = "更新已儲存的密碼"; replacePassword.SetBounds(345, 220, 220, 28); replacePassword.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(replacePassword); replacePassword.BringToFront();
             password.SetBounds(22, 253, 414, 28); password.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; password.UseSystemPasswordChar = true; password.MaxLength = 64; right.Controls.Add(password);
             showPassword.Text = "顯示密碼"; showPassword.SetBounds(450, 253, 115, 28); showPassword.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(showPassword);
@@ -144,19 +183,34 @@ namespace NetworkRecovery
             TextLabel(right, "密碼由 Windows 保存，不會寫入本應用的設定或紀錄。", 22, 338, 540, 34, 9F, muted, false).Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             Card timing = new Card { Location = new Point(28, 595), Size = new Size(1024, 69), Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            Controls.Add(timing);
+            content.Controls.Add(timing);
             TextLabel(timing, "目前的保護流程", 20, 22, 175, 25, 10F, ink, true);
             TextLabel(timing, "斷網 3 分鐘 → 修復網卡 → 再等 60 秒 → 重啟電腦", 199, 15, 790, 24, 10F, blue, true);
             TextLabel(timing, "開機後給網路 5 分鐘恢復；持續無網將再次觸發修復。", 199, 40, 790, 21, 8.5F, muted, false);
-            status.SetBounds(30, 680, 600, 24); status.ForeColor = ink; status.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; Controls.Add(status);
-            notice.SetBounds(30, 709, 640, 61); notice.ForeColor = muted; notice.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
-            notice.Text = "啟用後會在背景持續運作。自動重啟會關閉程式，請定期儲存工作。"; Controls.Add(notice);
-            StyleButton(stop, "停止監控", false); stop.SetBounds(704, 690, 130, 46); stop.Anchor = AnchorStyles.Bottom | AnchorStyles.Right; Controls.Add(stop);
-            StyleButton(start, "儲存並啟用", true); start.SetBounds(850, 690, 202, 46); start.Anchor = AnchorStyles.Bottom | AnchorStyles.Right; Controls.Add(start);
-            Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = muted, Cursor = Cursors.Hand, Location = new Point(845, 748), Size = new Size(207, 27), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+            // Layout cells keep inherited-font scaling from making labels cover buttons.
+            TableLayoutPanel footer = new TableLayoutPanel {
+                Location = new Point(28, 675), Size = new Size(1024, 106),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+                ColumnCount = 3, RowCount = 3, Margin = Padding.Empty, Padding = Padding.Empty
+            };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146F));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 218F));
+            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
+            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 46F));
+            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
+            content.Controls.Add(footer);
+            status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
+            footer.Controls.Add(status, 0, 0); footer.SetColumnSpan(status, 3);
+            notice.ForeColor = muted; notice.Dock = DockStyle.Fill; notice.Margin = new Padding(0, 0, 12, 0);
+            notice.Text = "啟用後會在背景持續運作。自動重啟會關閉程式，請定期儲存工作。";
+            footer.Controls.Add(notice, 0, 1); footer.SetRowSpan(notice, 2);
+            StyleButton(stop, "停止監控", false); stop.Dock = DockStyle.Fill; stop.Margin = new Padding(16, 0, 0, 0); footer.Controls.Add(stop, 1, 1);
+            StyleButton(start, "儲存並啟用", true); start.Dock = DockStyle.Fill; start.Margin = new Padding(16, 0, 0, 0); footer.Controls.Add(start, 2, 1);
+            Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = muted, Cursor = Cursors.Hand, Dock = DockStyle.Fill, Margin = Padding.Empty };
             settings.FlatAppearance.BorderSize = 0;
             settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
-            Controls.Add(settings);
+            footer.Controls.Add(settings, 2, 2);
             UpdateWifiControls();
         }
 
