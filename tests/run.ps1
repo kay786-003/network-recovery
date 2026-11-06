@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'powershell-encoding.ps1')
 $project = Split-Path -Parent $PSScriptRoot
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $compiler)) { $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
@@ -12,7 +13,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 Write-Output 'No network configuration, profiles, tasks or restart actions were changed.'
 
 # Read-only Windows COM regression: a missing task may throw FileNotFoundException.
-$application = Join-Path $project 'dist\NetworkRecovery.exe'
+$exeName = (Get-Content -LiteralPath (Join-Path $project 'dist\current-build.txt') -Raw).Trim()
+if ($exeName -notmatch '^NetworkRecovery-v\d+\.\d+\.\d+(-dev-\d{8}-\d{6})?\.exe$') { throw 'Invalid build filename.' }
+$application = Join-Path $project ('dist\' + $exeName)
 if (-not (Test-Path -LiteralPath $application)) { throw 'Run build.ps1 before tests.' }
 Copy-Item -LiteralPath $application -Destination $folder
 $schedulerExe = Join-Path $folder 'SchedulerReadChecks.exe'
@@ -27,3 +30,35 @@ $uiExe = Join-Path $folder 'UiLayoutChecks.exe'
 if ($LASTEXITCODE -ne 0) { throw 'UI test compilation failed.' }
 & $uiExe
 if ($LASTEXITCODE -ne 0) { throw 'UI layout tests failed.' }
+
+# Isolated restart history checks; no production state or actions.
+$budgetExe = Join-Path $folder 'RestartBudgetChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Xml.dll ('/out:' + $budgetExe) (Join-Path $project 'src\RestartBudget.cs') (Join-Path $PSScriptRoot 'RestartBudgetChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Restart budget test compilation failed.' }
+& $budgetExe
+if ($LASTEXITCODE -ne 0) { throw 'Restart budget tests failed.' }
+
+$featuresExe = Join-Path $folder 'RecoveryFeatureChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Xml.dll ('/reference:' + $application) ('/out:' + $featuresExe) (Join-Path $PSScriptRoot 'RecoveryFeatureChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Recovery feature test compilation failed.' }
+& $featuresExe
+if ($LASTEXITCODE -ne 0) { throw 'Recovery feature tests failed.' }
+
+# Real filesystem checks use only fresh temporary objects owned by the test user.
+$securityExe = Join-Path $folder 'InstallPathSecurityChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Security.dll ('/out:' + $securityExe) (Join-Path $project 'src\InstallPathSecurity.cs') (Join-Path $PSScriptRoot 'InstallPathSecurityChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Install-path security test compilation failed.' }
+& $securityExe
+if ($LASTEXITCODE -ne 0) { throw 'Install-path security tests failed.' }
+
+$settingsExe = Join-Path $folder 'SettingsWindowInstanceChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Windows.Forms.dll ('/out:' + $settingsExe) (Join-Path $project 'src\SettingsWindowInstance.cs') (Join-Path $PSScriptRoot 'SettingsWindowInstanceChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Settings instance test compilation failed.' }
+& $settingsExe
+if ($LASTEXITCODE -ne 0) { throw 'Settings instance tests failed.' }
+
+$iconsExe = Join-Path $folder 'IconResourceChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Drawing.dll /reference:System.Windows.Forms.dll ('/reference:' + $application) ('/out:' + $iconsExe) (Join-Path $PSScriptRoot 'IconResourceChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Icon resource test compilation failed.' }
+& $iconsExe (Join-Path $folder 'icons-preview.png')
+if ($LASTEXITCODE -ne 0) { throw 'Icon resource checks failed.' }

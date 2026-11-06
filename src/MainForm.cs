@@ -22,6 +22,9 @@ namespace NetworkRecovery
         readonly Panel content = new Panel();
         TableLayoutPanel root;
         TableLayoutPanel body;
+        TableLayoutPanel footerPanel;
+        Card flowCard;
+        FlowLayoutPanel linkPanel;
         Card adapterCard;
         Card wifiCard;
         bool wideLayout;
@@ -49,6 +52,7 @@ namespace NetworkRecovery
         bool populating;
         int selectionVersion;
         int networkRequest;
+        MonitorToolsForm toolsWindow;
 
         public MainForm(bool previewMode)
         {
@@ -56,6 +60,7 @@ namespace NetworkRecovery
             preview = previewMode;
             using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) scale = g.DpiX / 96F;
             Text = "Network Recovery · 連線守護";
+            Icon = AppIcons.Application;
             Font = new Font(FontName, 9F);
             BackColor = Color.FromArgb(9, 14, 26);
             ForeColor = ink;
@@ -93,7 +98,7 @@ namespace NetworkRecovery
             };
             FormClosed += delegate { statusTimer.Stop(); statusTimer.Dispose(); password.Clear(); };
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
-                if (busy) { e.Cancel = true; ShowNotice("正在完成監控設定，請稍候再關閉視窗。", false); }
+                if (busy || (toolsWindow != null && !toolsWindow.IsDisposed && toolsWindow.IsBusy)) { e.Cancel = true; ShowNotice("正在完成網路操作，請稍候再關閉視窗。", false); }
             };
         }
 
@@ -160,6 +165,16 @@ namespace NetworkRecovery
                 body.Controls.Add(adapterCard, 0, 0); body.Controls.Add(wifiCard, 0, 1);
             }
             body.ResumeLayout(true);
+            PlaceLinks(wide);
+        }
+
+        // Link buttons share the button row on wide windows; on narrow ones they move under the flow summary.
+        void PlaceLinks(bool wide)
+        {
+            if (linkPanel == null || footerPanel == null || flowCard == null) return;
+            if (linkPanel.Parent != null) linkPanel.Parent.Controls.Remove(linkPanel);
+            if (wide) { linkPanel.Margin = Padding.Empty; footerPanel.Controls.Add(linkPanel, 0, 1); }
+            else { linkPanel.Margin = new Padding(0, S(8), 0, 0); flowCard.Controls.Add(linkPanel, 0, 3); }
         }
 
         void FitAdapterColumns()
@@ -284,10 +299,22 @@ namespace NetworkRecovery
                 Padding = new Padding(S(2), S(6), S(10), S(6)), Font = new Font(FontName, 9F, FontStyle.Underline) };
             settings.FlatAppearance.BorderSize = 0; settings.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
             settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
-            footer.Controls.Add(settings, 0, 1);
+            Button tools = new Button { Text = "監控工具", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
+                Padding = new Padding(S(10), S(6), S(10), S(6)), Font = new Font(FontName, 9F, FontStyle.Underline) };
+            tools.FlatAppearance.BorderSize = 0; tools.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
+            tools.Click += delegate {
+                if (busy) return;
+                if (toolsWindow == null || toolsWindow.IsDisposed) { toolsWindow = new MonitorToolsForm(preview); toolsWindow.Show(this); }
+                else toolsWindow.Activate();
+            };
+            FlowLayoutPanel links = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
+            links.Controls.Add(settings); links.Controls.Add(tools);
+            flow.RowCount = 4; flow.RowStyles.Add(new RowStyle(SizeType.AutoSize)); linkPanel = links; flowCard = flow; footerPanel = footer;
             StyleButton(stop, "停止監控", false); stop.Anchor = AnchorStyles.Right; stop.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(stop, 1, 1);
             StyleButton(start, "儲存並啟用", true); start.Anchor = AnchorStyles.Right; start.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(start, 2, 1);
             root.Controls.Add(footer, 0, 4);
+            PlaceLinks(wideLayout);
             StyleDark();
             UpdateWifiControls();
         }
@@ -508,8 +535,10 @@ namespace NetworkRecovery
             ShowNotice("正在儲存設定並啟用背景監控…", false);
             try
             {
-                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi };
+                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi, WifiSsidHex = useWifi ? wifi.SsidHex : "" };
                 await Task.Run(delegate {
+                    using (ActionLease action = new ActionLease(1000))
+                    {
                     if (useWifi)
                     {
                         config.WifiProfileName = NetworkManager.ConfigureWifi(new Guid(adapter.Id), wifi, enteredPassword);
@@ -518,6 +547,7 @@ namespace NetworkRecovery
                             throw new InvalidOperationException("Wi-Fi 尚未成功連線，監控未切換。請確認訊號與密碼；若密碼錯誤，請重新掃描、選擇該 Wi-Fi，勾選『更新已儲存的密碼』後再試。" );
                     }
                     AppInstaller.Install(config);
+                    }
                 });
                 saved = config; password.Clear();
                 ShowNotice("已啟用。關閉這個視窗後，監控仍會在背景和每次開機後執行。", false);

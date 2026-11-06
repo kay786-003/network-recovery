@@ -21,7 +21,7 @@ namespace NetworkRecovery
     public class WifiNetwork
     {
         public string Ssid, ProfileName, Security, SsidHex;
-        public bool HasSavedProfile, IsConnected, IsConnectable, IsOpen, IsSupportedPersonal;
+        public bool HasSavedProfile, IsConnected, IsConnectable, IsOpen, IsSupportedPersonal, IsVisible;
         public int Signal;
         public uint Auth, Cipher;
         public override string ToString()
@@ -122,6 +122,7 @@ namespace NetworkRecovery
                         bool open = !raw.SecurityEnabled && raw.Auth == 1;
                         WifiNetwork network = new WifiNetwork { Ssid = name, SsidHex = hex, ProfileName = raw.ProfileName, Auth = raw.Auth, Cipher = raw.Cipher,
                             HasSavedProfile = (raw.Flags & 2) != 0, IsConnected = (raw.Flags & 1) != 0, IsConnectable = raw.Connectable,
+                            IsVisible = raw.BssidCount > 0,
                             Signal = (int)raw.Signal, IsOpen = open, IsSupportedPersonal = (raw.Auth == 7 || raw.Auth == 9) && raw.Cipher == 4,
                             Security = open ? "開放網絡" : raw.Auth == 7 ? "WPA2-Personal" : raw.Auth == 9 ? "WPA3-Personal" : "企業／其他安全性（須使用 Windows 已存設定）" };
                         string key = hex + ":" + raw.Auth + ":" + raw.Cipher;
@@ -183,6 +184,30 @@ namespace NetworkRecovery
                 // No overwrite: a same-name profile owned by someone else is preserved.
                 CheckProfile(WlanSetProfile(client.Handle, ref id, 0, xml, null, false, IntPtr.Zero, out profileReason), profileReason);
                 return profileName;
+            }
+        }
+
+        // Flags=0 never requests plaintext key material. Only the SSID is retained.
+        public static string GetProfileSsid(Guid id, string profileName)
+        {
+            using (WlanClient client = new WlanClient())
+            {
+                IntPtr ptr = IntPtr.Zero;
+                uint flags = 0, access;
+                try
+                {
+                    Check(WlanGetProfile(client.Handle, ref id, profileName, IntPtr.Zero, out ptr, ref flags, out access), "讀取 Wi-Fi 識別");
+                    XmlDocument doc = new XmlDocument { XmlResolver = null };
+                    doc.LoadXml(Marshal.PtrToStringUni(ptr));
+                    XmlNamespaceManager ns = new XmlNamespaceManager(doc.NameTable);
+                    ns.AddNamespace("w", "http://www.microsoft.com/networking/WLAN/profile/v1");
+                    XmlNode hex = doc.SelectSingleNode("/w:WLANProfile/w:SSIDConfig/w:SSID/w:hex", ns);
+                    if (hex != null) { ValidateSsidHex(hex.InnerText); return hex.InnerText.ToUpperInvariant(); }
+                    XmlNode name = doc.SelectSingleNode("/w:WLANProfile/w:SSIDConfig/w:SSID/w:name", ns);
+                    if (name == null) throw new InvalidOperationException("Wi-Fi 設定缺少 SSID。");
+                    return BitConverter.ToString(Encoding.UTF8.GetBytes(name.InnerText)).Replace("-", "");
+                }
+                finally { if (ptr != IntPtr.Zero) WlanFreeMemory(ptr); }
             }
         }
 
@@ -254,7 +279,7 @@ namespace NetworkRecovery
         {
             // Only a parsed GUID enters this fixed command; names/SSID/password never enter a shell.
             string script = "$ErrorActionPreference='Stop'; $a = Get-NetAdapter -IncludeHidden | Where-Object { [guid]$_.InterfaceGuid -eq [guid]'" + id.ToString("D") + "' }; if (@($a).Count -ne 1) { throw 'Selected network adapter no longer exists.' }; try { $a | Disable-NetAdapter -Confirm:$false -ErrorAction Stop; Start-Sleep -Seconds 2 } finally { $a | Enable-NetAdapter -Confirm:$false -ErrorAction Stop }";
-            RunPowerShell(script, 60000);
+            RunPowerShell(script, 60000, true);
             // Enabling the NIC does not necessarily enable the software Wi-Fi radio.
             Exception last = null;
             for (int attempt = 0; attempt < 5; attempt++)
@@ -290,7 +315,7 @@ namespace NetworkRecovery
             }
         }
 
-        private static string RunPowerShell(string script, int timeout)
+        private static string RunPowerShell(string script, int timeout, bool waitForMutation = false)
         {
             ProcessStartInfo start = new ProcessStartInfo(Environment.GetFolderPath(Environment.SpecialFolder.System) + "\\WindowsPowerShell\\v1.0\\powershell.exe",
                 "-NoLogo -NoProfile -NonInteractive -OutputFormat Text -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes("[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $ProgressPreference='SilentlyContinue'; trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }; " + script)));
@@ -305,8 +330,10 @@ namespace NetworkRecovery
                 process.Start(); process.BeginOutputReadLine(); process.BeginErrorReadLine();
                 if (!process.WaitForExit(timeout))
                 {
-                    // Do not kill a disable/enable sequence: its finally block must run.
-                    throw new TimeoutException("Windows 網卡操作尚未完成，請稍候再檢查網卡狀態。");
+                    // Keep the caller's action lease until a mutating child exits;
+                    // its finally block must re-enable the adapter before another action.
+                    if (waitForMutation) process.WaitForExit();
+                    else throw new TimeoutException("Windows 網卡查詢尚未完成，請稍候再檢查網卡狀態。");
                 }
                 process.WaitForExit();
                 if (process.ExitCode != 0) throw new InvalidOperationException("Windows 網卡操作失敗：" + error.ToString().Trim());
