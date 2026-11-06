@@ -83,6 +83,8 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 | 手動修復備份（僅管理員／SYSTEM 可讀寫） | `%ProgramData%\NetworkRecovery\repair-backup` |
 | Windows 工作排程名稱 | `NetworkRecovery Monitor`、`NetworkRecovery Tray` |
 
+若出現「無法保護安裝路徑」，表示設定安裝資料夾權限失敗；2026-11-06 的未發行建置已修正既有目錄控制代碼造成的共用衝突，錯誤訊息也會顯示 Windows 錯誤碼與說明。請以最新測試建置重試；若仍失敗，提供錯誤碼即可，不必公開設定或私人日誌。
+
 應用檔案與設定僅供管理員及 SYSTEM 修改。設定檔只有網卡識別碼、Wi-Fi 設定名稱及時間，沒有 Wi-Fi 密碼。
 
 升級時先關閉舊設定視窗，再執行這次下載／建置的 EXE，按「儲存並啟用」。只開啟視窗不切換監控。程式先備份檔案與排程，停止舊的 `NetworkRecovery Monitor` 及 `NetworkRecovery Tray`，替換安裝檔與設定，確認新排程持續執行。早期 `Codex Network Recovery` 會停止並停用，保留排程定義供失敗時還原，不刪除舊腳本或私人資料。

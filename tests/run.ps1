@@ -42,3 +42,10 @@ $featuresExe = Join-Path $folder 'RecoveryFeatureChecks.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Recovery feature test compilation failed.' }
 & $featuresExe
 if ($LASTEXITCODE -ne 0) { throw 'Recovery feature tests failed.' }
+
+# Real filesystem checks use only fresh temporary objects owned by the test user.
+$securityExe = Join-Path $folder 'InstallPathSecurityChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Security.dll ('/out:' + $securityExe) (Join-Path $project 'src\InstallPathSecurity.cs') (Join-Path $PSScriptRoot 'InstallPathSecurityChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Install-path security test compilation failed.' }
+& $securityExe
+if ($LASTEXITCODE -ne 0) { throw 'Install-path security tests failed.' }

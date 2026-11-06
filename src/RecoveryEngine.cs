@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using Microsoft.Win32.SafeHandles;
 using System.Diagnostics;
 using System.IO;
 using System.Management;
@@ -695,30 +693,6 @@ namespace NetworkRecovery
                 "</UserId><LogonType>InteractiveToken</LogonType>").Replace("<Arguments>--monitor</Arguments>", "<Arguments>--tray</Arguments>");
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct FileHandleInfo
-        {
-            public uint Attributes;
-            public System.Runtime.InteropServices.ComTypes.FILETIME Created, Accessed, Written;
-            public uint VolumeSerial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
-        }
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security,
-            uint creation, uint flags, IntPtr template);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileHandleInfo info);
-        [DllImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetSecurityDescriptorOwner(IntPtr descriptor, out IntPtr owner, out bool defaulted);
-        [DllImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetSecurityDescriptorDacl(IntPtr descriptor, out bool present, out IntPtr dacl, out bool defaulted);
-        [DllImport("advapi32.dll")]
-        private static extern uint SetSecurityInfo(SafeFileHandle handle, int objectType, uint information,
-            IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
-
         private static void ValidateInstallPaths()
         {
             RejectReparsePath(AppPaths.Root, true);
@@ -796,46 +770,16 @@ namespace NetworkRecovery
 
         private static void ApplyProtectedAcl(string path, bool directory, bool readable = true)
         {
-            // Open the object itself, never a reparse target. Excluding delete sharing
-            // prevents renaming/replacing it between validation and the ACL write.
-            const uint MaximumAllowed = 0x02000000;
-            const uint OpenReparsePoint = 0x00200000, BackupSemantics = 0x02000000;
-            using (SafeFileHandle handle = CreateFile(path, MaximumAllowed,
-                3, IntPtr.Zero, 3, OpenReparsePoint | BackupSemantics, IntPtr.Zero))
-            {
-                if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "無法保護安裝路徑：" + path);
-                FileHandleInfo info;
-                if (!GetFileInformationByHandle(handle, out info)) throw new Win32Exception(Marshal.GetLastWin32Error());
-                if ((info.Attributes & (uint)FileAttributes.ReparsePoint) != 0 ||
-                    ((info.Attributes & (uint)FileAttributes.Directory) != 0) != directory ||
-                    (!directory && info.Links > 1))
-                    throw new IOException("拒絕使用連結或類型不符的安裝路徑：" + path);
-                FileSystemSecurity security = directory ? (FileSystemSecurity)new DirectorySecurity() : new FileSecurity();
-                security.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
-                security.SetAccessRuleProtection(true, false);
-                InheritanceFlags inheritance = directory ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit : InheritanceFlags.None;
-                foreach (WellKnownSidType sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
-                    security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
-                        inheritance, PropagationFlags.None, AccessControlType.Allow));
-                if (readable) security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null),
-                    FileSystemRights.ReadAndExecute, inheritance, PropagationFlags.None, AccessControlType.Allow));
-                // MAXIMUM_ALLOWED suppresses SetSecurityInfo propagation to existing children;
-                // only these specific objects change. Newly created files still inherit this DACL.
-                GCHandle descriptor = GCHandle.Alloc(security.GetSecurityDescriptorBinaryForm(), GCHandleType.Pinned);
-                try
-                {
-                    IntPtr owner, dacl;
-                    bool defaulted, present;
-                    IntPtr address = descriptor.AddrOfPinnedObject();
-                    if (!GetSecurityDescriptorOwner(address, out owner, out defaulted) ||
-                        !GetSecurityDescriptorDacl(address, out present, out dacl, out defaulted) || !present || dacl == IntPtr.Zero)
-                        throw new InvalidOperationException("無法建立安全的安裝權限設定。");
-                    // SE_FILE_OBJECT = 1; OWNER | DACL | PROTECTED_DACL information.
-                    uint error = SetSecurityInfo(handle, 1, 0x80000005, owner, IntPtr.Zero, dacl, IntPtr.Zero);
-                    if (error != 0) throw new Win32Exception((int)error, "無法設定管理員專用的寫入權限：" + path);
-                }
-                finally { descriptor.Free(); }
-            }
+            FileSystemSecurity security = directory ? (FileSystemSecurity)new DirectorySecurity() : new FileSecurity();
+            security.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+            security.SetAccessRuleProtection(true, false);
+            InheritanceFlags inheritance = directory ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit : InheritanceFlags.None;
+            foreach (WellKnownSidType sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
+                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
+                    inheritance, PropagationFlags.None, AccessControlType.Allow));
+            if (readable) security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null),
+                FileSystemRights.ReadAndExecute, inheritance, PropagationFlags.None, AccessControlType.Allow));
+            InstallPathSecurity.Apply(path, directory, security);
         }
 
         private static void RequireAdministrator()

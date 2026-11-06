@@ -26,6 +26,8 @@ D0007 的 `RestartBudget.cs` 保存最多五筆重啟預約，逐筆以 4 小時
 
 所有可由 SYSTEM 執行的應用檔案都安裝在受保護的 Program Files 目錄，設定置於受保護的 ProgramData 目錄。標準使用者只可讀取，無法替換背景執行的程式或設定。
 
+`InstallPathSecurity.cs` 以 READ_CONTROL／WRITE_DAC／WRITE_OWNER／FILE_READ_ATTRIBUTES 開啟目標，不再用 MAXIMUM_ALLOWED 要求不必要的 DELETE 或資料讀寫權限，避免現有目錄讀取或工作目錄控制代碼造成共用衝突。仍使用 OPEN_REPARSE_POINT、拒絕 delete sharing，並在同一控制代碼上檢查物件類型、重新解析點及硬連結。以 Windows 內建 ntdll 的 NtSetSecurityObject 僅更新該物件的 owner 與受保護 DACL，不遍歷或傳播到既有子項；新增檔案仍正常繼承。權限失敗仍中止操作，並顯示原始 Windows 錯誤碼及說明。
+
 排程讀取僅在 `GetTask` 邊界將 `0x80070002`／`0x8004130F` 視為不存在，涵蓋 COMException 與 Framework 映射出的 FileNotFoundException；服務連線、存取權限及其他 HRESULT 不視為未安裝。此讀取路徑同時用於狀態、安裝快照與停止／還原流程。
 
 D0008 使用掃描的可見 SSID（排除只有已儲存、沒有 BSSID 的項目），以主要 SSID 的 hex 識別；舊設定從 Windows profile 唯讀取得 SSID，不匯出明文金鑰。主要目標不在、其他 SSID 可見時跳過網卡修復／重啟並每約 30 秒掃描與嘗試已儲存候選；一個 SSID 都不可見或掃描失敗時回到修復流程。候選主要設定優先，其餘按名稱排序輪流連線，不要求或保存其他密碼；連線要求失敗不能撤銷已確認的目標不在判定。
@@ -39,6 +41,9 @@ D0011 使用同一個 `RestartRequest` 閘門：預約額度、持久化額度�
 `ManualRepair.cs` 只由互動視窗呼叫，沒有排程或命令列入口。「監控工具」只有備份、還原備份、一鍵修復並重設、移除備份四個按鈕。備份保存目前使用者三個 Proxy 值（含不存在狀態）、WinHTTP／IPv4／IPv6 netsh dump、Winsock 登錄設定與校驗，不覆寫既有備份。一鍵修復需先確認，已有備份須通過帳戶與完整性驗證；沒有備份則先建立，再清 DNS、修復所選網卡、重設 Proxy／Winsock／IP。備份僅管理員／SYSTEM 可讀寫。WTS session SID 必須符合目前 token，防止以 SYSTEM 或其他管理員帳戶修改錯誤 HKCU。重設失敗會嘗試各備份還原並保留資料；還原成功亦可能需要重啟。VPN 廠商元件及驅動差異仍需實機驗收，不能保證登錄／IP 還原涵蓋第三方安裝程式的全部效果。手動修復只重設斷網觀察計時，不清除重啟額度；修復及還原成功後只顯示單一「確定」的重啟提醒，不呼叫 `RestartRequest` 或 shutdown；按確定只關閉提醒。自動監控的重啟閘門維持原流程。
 
 ## Windows 官方參考
+
+- [CreateFile 存取權限及共用模式](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
+- [Nt／ZwSetSecurityObject](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-zwsetsecurityobject)
 
 - [netsh Winsock](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winsock)
 - [netsh interface 備份與還原](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface)
