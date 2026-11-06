@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -22,10 +22,10 @@ class UiLayoutChecks
             foreach (Control sibling in button.Parent.Controls)
                 if (sibling != button && sibling.Visible)
                     Check(!button.Bounds.IntersectsWith(sibling.Bounds), "Footer control covers a button.");
-            form.ScrollControlIntoView(button); Application.DoEvents();
+            form.PerformLayout(); Application.DoEvents(); form.ScrollControlIntoView(button); Application.DoEvents();
             Rectangle visible = button.RectangleToScreen(button.ClientRectangle);
             for (Control parent = button.Parent; parent != null; parent = parent.Parent)
-                Check(parent.RectangleToScreen(parent.ClientRectangle).Contains(visible), "Button is clipped by ancestor.");
+                Check(parent.RectangleToScreen(parent.ClientRectangle).Contains(visible), "Button is clipped by ancestor. scale=" + Theme.Scale + " button=" + button.Text + " ancestor=" + parent.GetType().Name + " " + parent.RectangleToScreen(parent.ClientRectangle) + " vs " + visible + " form=" + form.ClientSize);
         }
     }
     // Every visible control must stay inside its parent, must not overlap siblings, and wrapped text must fit.
@@ -62,6 +62,13 @@ class UiLayoutChecks
     {
         SetProcessDPIAware();
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+        // Rehearse 100%, 125%, 150% and 200% scaling: spacing and fonts scale together through Theme.Scale.
+        foreach (float scale in new[] { 1.0F, 1.25F, 1.5F, 2.0F }) { Theme.Scale = scale; RunWindows(); }
+        CheckTrayMenu();
+        Console.WriteLine("Passed " + passed + " UI layout checks using demo data at 100/125/150/200% scale; no network or scheduler changes.");
+    }
+    static void RunWindows()
+    {
         using (MainForm form = new MainForm(true))
         {
             form.Show(); Application.DoEvents(); CheckFooter(form);
@@ -82,21 +89,20 @@ class UiLayoutChecks
         using (MonitorToolsForm form = new MonitorToolsForm(true))
         {
             form.Show(); Application.DoEvents();
-            FlowLayoutPanel actions = (FlowLayoutPanel)typeof(MonitorToolsForm).GetField("actions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+            TableLayoutPanel actions = (TableLayoutPanel)typeof(MonitorToolsForm).GetField("actions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
             string[] names = { "備份", "還原備份", "一鍵修復並重設", "移除備份" };
             Check(actions.Controls.Count == names.Length, "Tools must expose exactly four actions.");
             for (int i = 0; i < names.Length; i++) Check(actions.Controls[i].Text == names[i], "Unexpected tools action or order.");
-            CheckTools(form);
+            CheckTools(form); CheckAll(form.Controls[0]);
             ResetScroll(form); Application.DoEvents();
             string preview = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(MainForm).Assembly.Location), "tools-preview.png");
             using (Bitmap bitmap = new Bitmap(form.Width, form.Height))
             { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(preview); }
             Console.WriteLine("Demo tools preview: " + preview);
-            form.Size = new Size(900, 700); Application.DoEvents(); CheckTools(form);
+            foreach (int[] s in new[] { new[]{900,700}, new[]{560,520}, new[]{420,400}, new[]{360,300} })
+            { form.ClientSize = new Size(s[0], s[1]); Application.DoEvents(); Application.DoEvents(); CheckTools(form); CheckAll(form.Controls[0]); }
             form.Close();
         }
-        CheckTrayMenu();
-        Console.WriteLine("Passed " + passed + " UI layout checks using demo data; no network or scheduler changes.");
     }
     static void CheckTrayMenu()
     {
@@ -136,7 +142,6 @@ class UiLayoutChecks
             {
                 Size text = TextRenderer.MeasureText(button.Text, button.Font, new Size(button.Width - 24, 0), TextFormatFlags.WordBreak);
                 Check(button.Height >= text.Height + 8, "Tools button text clipped.");
-                ((ScrollableControl)button.Parent).ScrollControlIntoView(button); Application.DoEvents();
                 Check(button.Parent.ClientRectangle.Contains(button.Bounds), "Tools button cannot scroll into view: " + button.Text + " " + button.Bounds + " in " + button.Parent.ClientRectangle);
             }
             CheckTools(child);

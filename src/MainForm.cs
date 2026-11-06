@@ -12,11 +12,11 @@ namespace NetworkRecovery
 {
     public sealed class MainForm : Form
     {
-        const string FontName = "Microsoft JhengHei UI";
-        readonly Color ink = Color.FromArgb(226, 235, 248);
-        readonly Color muted = Color.FromArgb(127, 146, 176);
-        readonly Color blue = Color.FromArgb(34, 211, 238);
-        readonly Color line = Color.FromArgb(34, 52, 82);
+        const string FontName = Theme.FontName;
+        readonly Color ink = Theme.Ink;
+        readonly Color muted = Theme.Muted;
+        readonly Color blue = Theme.Accent;
+        readonly Color line = Theme.Line;
         readonly bool preview;
         readonly float scale;
         readonly Panel content = new Panel();
@@ -58,10 +58,10 @@ namespace NetworkRecovery
         {
             SuspendLayout();
             preview = previewMode;
-            using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) scale = g.DpiX / 96F;
+            scale = Theme.Scale;
             Text = "Network Recovery · 連線守護";
             Icon = AppIcons.Application;
-            Font = new Font(FontName, 9F);
+            Font = Theme.Font(9F, FontStyle.Regular);
             BackColor = Color.FromArgb(9, 14, 26);
             ForeColor = ink;
             // Every pixel value goes through S(); fonts are point-based, so text and layout scale together.
@@ -191,36 +191,17 @@ namespace NetworkRecovery
         Label Text1(string text, float size, Color color, bool bold)
         {
             return new Label { Text = text, AutoSize = true, ForeColor = color, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
-                Font = new Font(FontName, size, bold ? FontStyle.Bold : FontStyle.Regular) };
+                Font = Theme.Font(size, bold) };
         }
 
         // Paragraph text that wraps to the width of its cell and grows the row instead of overlapping neighbours.
         WrapLabel Para(string text, float size, Color color, bool bold)
         {
             return new WrapLabel { Text = text, ForeColor = color, Dock = DockStyle.Fill, Margin = Padding.Empty,
-                Font = new Font(FontName, size, bold ? FontStyle.Bold : FontStyle.Regular) };
+                Font = Theme.Font(size, bold) };
         }
 
-        void StyleButton(Button button, string text, bool primary)
-        {
-            button.Text = text; button.FlatStyle = FlatStyle.Flat; button.Cursor = Cursors.Hand;
-            button.AutoSize = true; button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.MinimumSize = new Size(S(primary ? 150 : 104), S(40));
-            button.Padding = new Padding(S(14), S(4), S(14), S(4));
-            button.Margin = Padding.Empty;
-            button.FlatAppearance.BorderSize = primary ? 0 : 1;
-            button.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112);
-            button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(103, 232, 249) : Color.FromArgb(30, 45, 76);
-            button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(6, 182, 212) : Color.FromArgb(38, 56, 92);
-            button.Font = new Font(FontName, 9.5F, FontStyle.Bold);
-            button.UseVisualStyleBackColor = false;
-            Action paint = delegate {
-                button.BackColor = button.Enabled ? (primary ? blue : Color.FromArgb(20, 30, 50)) : Color.FromArgb(22, 32, 50);
-                button.ForeColor = button.Enabled ? (primary ? Color.FromArgb(4, 18, 32) : ink) : Color.FromArgb(88, 104, 130);
-            };
-            button.EnabledChanged += delegate { paint(); };
-            paint();
-        }
+        void StyleButton(Button button, string text, bool primary) { Theme.StyleButton(button, text, primary ? 1 : 0); }
 
         void BuildLayout()
         {
@@ -262,7 +243,7 @@ namespace NetworkRecovery
             // Status banner: always visible at the top so the monitoring state is the first thing read.
             Card banner = new Card(new Padding(S(20), S(12), S(20), S(12)), blue) { AutoSize = true, Margin = new Padding(0, 0, 0, S(14)) };
             banner.RowCount = 1; banner.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            status.Font = new Font(FontName, 10F, FontStyle.Bold); status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
+            status.Font = Theme.Font(10F, FontStyle.Bold); status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
             banner.Controls.Add(status, 0, 0);
             root.Controls.Add(banner, 0, 1);
 
@@ -296,12 +277,12 @@ namespace NetworkRecovery
             footer.Controls.Add(notice, 0, 0); footer.SetColumnSpan(notice, 3);
             Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
-                Padding = new Padding(S(2), S(6), S(10), S(6)), Font = new Font(FontName, 9F, FontStyle.Underline) };
+                Padding = new Padding(S(2), S(6), S(10), S(6)), Font = Theme.Font(9F, FontStyle.Underline) };
             settings.FlatAppearance.BorderSize = 0; settings.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
             settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
             Button tools = new Button { Text = "監控工具", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
-                Padding = new Padding(S(10), S(6), S(10), S(6)), Font = new Font(FontName, 9F, FontStyle.Underline) };
+                Padding = new Padding(S(10), S(6), S(10), S(6)), Font = Theme.Font(9F, FontStyle.Underline) };
             tools.FlatAppearance.BorderSize = 0; tools.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
             tools.Click += delegate {
                 if (busy) return;
@@ -589,51 +570,6 @@ namespace NetworkRecovery
             networks.SelectedIndex = 0; loading = false;
             adapterInfo.Text = demo.Description; NetworkChanged();
             status.Text = "●  尚未啟用 · 完成設定後即可開始保護";
-        }
-
-        // White card with a hairline border and an optional accent bar; lays its children out as rows.
-        sealed class Card : TableLayoutPanel
-        {
-            readonly Color accent;
-            public Card(Padding padding, Color accentColor)
-            {
-                accent = accentColor; BackColor = Color.FromArgb(16, 24, 41); DoubleBuffered = true;
-                Dock = DockStyle.Fill; ColumnCount = 1; Padding = padding; Margin = Padding.Empty;
-                if (!accentColor.IsEmpty) Padding = new Padding(padding.Left + 4, padding.Top, padding.Right, padding.Bottom);
-            }
-            protected override void OnPaint(PaintEventArgs e)
-            {
-                base.OnPaint(e);
-                using (Pen p = new Pen(Color.FromArgb(34, 52, 82))) e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
-                if (!accent.IsEmpty) using (SolidBrush b = new SolidBrush(accent)) e.Graphics.FillRectangle(b, 0, 0, 4, Height);
-            }
-        }
-
-        // CheckBox that never wraps its text inside a table cell (a narrow proposed width would clip CJK text).
-        sealed class PlainCheckBox : CheckBox
-        {
-            public PlainCheckBox() { AutoSize = true; }
-            public override Size GetPreferredSize(Size proposedSize) { return base.GetPreferredSize(Size.Empty); }
-        }
-
-        // Label whose height follows its wrapped text at the width the table cell offers, so long messages
-        // push content down instead of overlapping it. It reports a tiny width so it never forces a cell wider.
-        sealed class WrapLabel : Label
-        {
-            public WrapLabel() { AutoSize = true; }
-            public override Size GetPreferredSize(Size proposedSize)
-            {
-                bool known = proposedSize.Width > 1 && proposedSize.Width < 100000;
-                int width = known ? proposedSize.Width : Math.Max(Width, 1);
-                Size text = TextRenderer.MeasureText(Text, Font, new Size(width, 100000),
-                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top);
-                return new Size(known ? width : 1, text.Height + 2);
-            }
-            protected override void OnSizeChanged(EventArgs e)
-            {
-                base.OnSizeChanged(e);
-                if (Parent != null) Parent.PerformLayout(this, "Bounds");
-            }
         }
     }
 }

@@ -2,7 +2,7 @@
 
 Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
 
-**下載：[v0.2.1 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.2.1)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
+**下載：[v0.2.2 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.2.2)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
 
 ![首次設定示範畫面](docs/preview.png)
 
@@ -103,7 +103,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 輸出為 `dist/NetworkRecovery-v<產品版本>-dev-<建置時間>.exe` 及 SHA-256 摘要；`dist/current-build.txt` 記錄這次產物檔名。正式發行由 `release.ps1` 產生不含 dev 後綴的版本化 EXE，Windows ZIP 內檔名亦一致。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。圖標由 `build-icons.ps1` 離線轉為 ICO 並嵌入 EXE，不必另帶圖標檔。EXE 尚未做發行者數位簽章。
 
-維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.2.1` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
+維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.2.2` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
 
 執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML、密碼與啟動策略，唯讀查詢工作排程器，並短暫開啟示範視窗檢查按鈕遮擋與縮放（請先執行 build.ps1），不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
@@ -151,6 +151,6 @@ dist/                    建置產物
 
 ## 版本與後續工作
 
-v0.2.1 仍標記為預發行：使用者已回報先前斷網修復／重啟及安裝路徑錯誤修正成功；目前版本的開機觸發、暫停到期、跨重啟額度、進階重設／還原與完整升級還原仍待實機驗收。
+v0.2.2 仍標記為預發行：使用者已回報先前斷網修復／重啟及安裝路徑錯誤修正成功；目前版本的開機觸發、暫停到期、跨重啟額度、進階重設／還原與完整升級還原仍待實機驗收。
 
-目前 GitHub 預發行版本為 `v0.2.1`，EXE 產品版本為 `0.2.1`、檔案／manifest 版本為 `0.2.1.0`，在第一階段基礎上包含已授權的第二／第三階段功能。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。D0007～D0014 已納入 v0.2.1；D0009、D0010 維持既有單一外網判定及關閉睡眠前提。自訂多 Wi-Fi 優先順序與可調時間仍未實作。隔離測試不等於已完成掃描／重連、暫停、升級或進階修復還原的實機驗收。
+目前 GitHub 預發行版本為 `v0.2.2`，EXE 產品版本為 `0.2.2`、檔案／manifest 版本為 `0.2.2.0`，在第一階段基礎上包含已授權的第二／第三階段功能。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。D0007～D0014 已納入 v0.2.1；D0009、D0010 維持既有單一外網判定及關閉睡眠前提。自訂多 Wi-Fi 優先順序與可調時間仍未實作。隔離測試不等於已完成掃描／重連、暫停、升級或進階修復還原的實機驗收。

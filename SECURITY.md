@@ -22,4 +22,4 @@ EXE 不直接執行 `docs/reference/reset-network.cmd`，而由「一鍵修復�
 
 ## 驗證與發行限制
 
-v0.2.1 為未簽署的預發行版本。建置、文件與純資料測試不能代替實機驗收；新版 EXE 的真實 Wi-Fi 寫入、斷網修復及重新啟動仍依 `docs/VERIFICATION.md` 分別記錄。
+v0.2.2 為未簽署的預發行版本。建置、文件與純資料測試不能代替實機驗收；新版 EXE 的真實 Wi-Fi 寫入、斷網修復及重新啟動仍依 `docs/VERIFICATION.md` 分別記錄。

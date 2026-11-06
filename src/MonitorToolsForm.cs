@@ -9,59 +9,64 @@ namespace NetworkRecovery
     {
         private readonly bool demo;
         private bool busy;
-        private bool resizing;
         public bool IsBusy { get { return busy; } }
-        private readonly Label status = new Label();
-        private readonly FlowLayoutPanel actions = new FlowLayoutPanel();
+        private readonly Label status = new WrapLabel();
+        private readonly TableLayoutPanel actions = new TableLayoutPanel();
         public MonitorToolsForm(bool demoMode)
         {
             SuspendLayout();
             demo = demoMode;
             Text = "監控工具";
             Icon = AppIcons.Application;
-            Font = new Font("Microsoft JhengHei UI", 10F);
-            AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(560, 390); MinimumSize = new Size(440, 360);
-            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 105));
-            status.Dock = DockStyle.Fill; layout.Controls.Add(status, 0, 0);
-            actions.Dock = DockStyle.Fill; actions.AutoScroll = true; actions.FlowDirection = FlowDirection.TopDown; actions.WrapContents = false;
-            actions.ClientSizeChanged += delegate { ResizeButtons(); };
-            layout.Controls.Add(actions, 0, 1); Controls.Add(layout);
-            Add("備份", Backup);
-            Add("還原備份", Restore);
-            Add("一鍵修復並重設", Repair);
-            Add("移除備份", async delegate {
+            Font = Theme.Font(9F, false);
+            BackColor = Theme.Background; ForeColor = Theme.Ink;
+            AutoScaleMode = AutoScaleMode.None;
+            ClientSize = new Size(Theme.S(560), Theme.S(520));
+            MinimumSize = new Size(Theme.S(360), Theme.S(300));
+            AutoScroll = true;
+            // Docked to the top and auto-sized: narrow windows reflow text and only then scroll vertically.
+            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1, Padding = new Padding(Theme.S(22), Theme.S(18), Theme.S(22), Theme.S(18)) };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            Label title = new Label { Text = "監控工具", AutoSize = true, Font = Theme.Font(13F, true), ForeColor = Theme.Ink, Margin = new Padding(0, 0, 0, Theme.S(6)) };
+            layout.Controls.Add(title);
+            status.ForeColor = Theme.Muted; status.Dock = DockStyle.Fill; status.Margin = new Padding(0, 0, 0, Theme.S(14));
+            layout.Controls.Add(status);
+            actions.AutoSize = true; actions.AutoSizeMode = AutoSizeMode.GrowAndShrink; actions.ColumnCount = 1; actions.Dock = DockStyle.Fill; actions.Margin = Padding.Empty;
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.Controls.Add(actions);
+            Add("備份", 0, Backup);
+            Add("還原備份", 0, Restore);
+            Add("一鍵修復並重設", 2, Repair);
+            Add("移除備份", 0, async delegate {
                 if (Confirm("移除後將無法用此備份還原。確定移除？"))
                     await Execute(delegate { using (ActionLease lease = new ActionLease(1000)) ManualRepair.DiscardBackup(); });
             });
-            Label note = new Label { Dock = DockStyle.Fill, Text =
-                "備份只留在這台電腦，不會覆寫既有備份。\n修復會短暫斷線，並重設 Proxy、Winsock 與 TCP/IP，可能影響 VPN、固定 IP 與公司代理。完成後請自行重新啟動電腦。", AutoEllipsis = true };
-            layout.Controls.Add(note, 0, 2);
-            Shown += delegate { ResizeButtons(); status.Text = demo ? "網路設定備份與修復（示範）" : "備份與還原只處理這台電腦的網路設定。"; };
+            Card warning = new Card(new Padding(Theme.S(18), Theme.S(12), Theme.S(18), Theme.S(12)), Theme.Warning) { AutoSize = true, Margin = new Padding(0, Theme.S(6), 0, 0) };
+            WrapLabel note = new WrapLabel { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Margin = Padding.Empty, Text =
+                "備份只留在這台電腦，不會覆寫既有備份。\n修復會短暫斷線，並重設 Proxy、Winsock 與 TCP/IP，可能影響 VPN、固定 IP 與公司代理。完成後請自行重新啟動電腦。" };
+            warning.Controls.Add(note);
+            layout.Controls.Add(warning);
+            Controls.Add(layout);
+            Shown += delegate { status.Text = demo ? "網路設定備份與修復（示範）" : "備份與還原只處理這台電腦的網路設定。"; };
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if (busy) e.Cancel = true; };
             ResumeLayout(true);
+            status.Text = demo ? "網路設定備份與修復（示範）" : "備份與還原只處理這台電腦的網路設定。";
         }
-        private void ResizeButtons()
+        protected override void OnLoad(EventArgs e)
         {
-            if (resizing) return;
-            resizing = true;
-            try
-            {
-                int width = Math.Max(150, actions.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 12);
-                foreach (Control control in actions.Controls)
-                {
-                    Size text = TextRenderer.MeasureText(control.Text, control.Font, new Size(width - 24, 0), TextFormatFlags.WordBreak);
-                    control.Size = new Size(width, Math.Max(38, text.Height + 20));
-                }
-            }
-            finally { resizing = false; }
-        }
-        private void Add(string text, Func<Task> action)
+            // Never open larger than the usable desktop; the form scrolls instead.
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
+            Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
+            base.OnLoad(e);
+        }        // kind: 0 normal, 2 caution (amber) for the action that resets network settings.
+        private void Add(string text, int kind, Func<Task> action)
         {
-            Button button = new Button { Text = text, AutoSize = false, Size = new Size(350, 38), Margin = new Padding(0, 0, 0, 8) };
+            Button button = new Button { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, Theme.S(10)), TextAlign = ContentAlignment.MiddleLeft };
+            Theme.StyleButton(button, text, kind);
+            button.AutoSizeMode = AutoSizeMode.GrowOnly; button.MinimumSize = new Size(0, Theme.S(46)); button.Margin = new Padding(0, 0, 0, Theme.S(10));
+            button.Padding = new Padding(Theme.S(18), Theme.S(4), Theme.S(18), Theme.S(4));
             button.Click += async delegate { if (!demo && !busy) await action(); };
             actions.Controls.Add(button);
         }
