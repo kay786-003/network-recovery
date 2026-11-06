@@ -49,3 +49,9 @@ $securityExe = Join-Path $folder 'InstallPathSecurityChecks.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Install-path security test compilation failed.' }
 & $securityExe
 if ($LASTEXITCODE -ne 0) { throw 'Install-path security tests failed.' }
+
+$settingsExe = Join-Path $folder 'SettingsWindowInstanceChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Windows.Forms.dll ('/out:' + $settingsExe) (Join-Path $project 'src\SettingsWindowInstance.cs') (Join-Path $PSScriptRoot 'SettingsWindowInstanceChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Settings instance test compilation failed.' }
+& $settingsExe
+if ($LASTEXITCODE -ne 0) { throw 'Settings instance tests failed.' }

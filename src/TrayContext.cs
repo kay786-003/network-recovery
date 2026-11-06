@@ -14,6 +14,7 @@ namespace NetworkRecovery
         private bool disposed;
         private readonly ToolStripMenuItem[] pauses;
         private MonitorToolsForm toolsWindow;
+        private Process settingsProcess;
         private readonly ToolStripMenuItem status = new ToolStripMenuItem("等待監控回報") { Enabled = false };
         public TrayContext()
         {
@@ -37,7 +38,14 @@ namespace NetworkRecovery
         }
         private void OpenSettings()
         {
-            try { Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true }); }
+            try
+            {
+                if (SettingsWindowInstance.TryActivateExisting()) return;
+                // Suppress repeated launches while the first child is starting.
+                if (settingsProcess != null && !settingsProcess.HasExited) return;
+                if (settingsProcess != null) settingsProcess.Dispose();
+                settingsProcess = Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true });
+            }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Network Recovery", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
         private void ShowTools()
@@ -81,7 +89,7 @@ namespace NetworkRecovery
         }
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { disposed = true; timer.Dispose(); icon.Visible = false; icon.ContextMenuStrip.Dispose(); icon.Dispose(); }
+            if (disposing) { disposed = true; timer.Dispose(); icon.Visible = false; icon.ContextMenuStrip.Dispose(); icon.Dispose(); if (settingsProcess != null) settingsProcess.Dispose(); }
             base.Dispose(disposing);
         }
     }
