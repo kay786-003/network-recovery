@@ -23,18 +23,22 @@ namespace NetworkRecovery
             menu.Items.AddRange(pauses);
             menu.Opening += delegate { RefreshPauseChecks(); };
             menu.Items.Add("監控工具", null, delegate { ShowTools(); });
-            menu.Items.Add("開啟設定", null, delegate { Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true }); });
-            menu.Items.Add("停止監控", null, async delegate { await Run(AppInstaller.Stop); });
+            menu.Items.Add("開啟設定", null, delegate { OpenSettings(); });
             menu.Items.Add("關閉系統匣（監控繼續）", null, delegate {
                 if (toolsWindow != null && !toolsWindow.IsDisposed && toolsWindow.IsBusy)
                     MessageBox.Show("網路操作進行中，請完成後再關閉系統匣。", "Network Recovery");
                 else ExitThread();
             });
             icon = new NotifyIcon { Icon = SystemIcons.Information, Text = "Network Recovery", ContextMenuStrip = menu, Visible = true };
-            icon.DoubleClick += delegate { ShowTools(); };
+            icon.DoubleClick += delegate { OpenSettings(); };
             timer.Interval = 5000;
             timer.Tick += async delegate { await UpdateStatus(); };
             timer.Start();
+        }
+        private void OpenSettings()
+        {
+            try { Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Network Recovery", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
         private void ShowTools()
         {
