@@ -18,6 +18,7 @@ namespace NetworkRecovery
             SuspendLayout();
             demo = demoMode;
             Text = "監控工具";
+            Icon = AppIcons.Application;
             Font = new Font("Microsoft JhengHei UI", 10F);
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(560, 390); MinimumSize = new Size(440, 360);

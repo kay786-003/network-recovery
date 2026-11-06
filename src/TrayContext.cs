@@ -30,7 +30,7 @@ namespace NetworkRecovery
                     MessageBox.Show("網路操作進行中，請完成後再關閉系統匣。", "Network Recovery");
                 else ExitThread();
             });
-            icon = new NotifyIcon { Icon = SystemIcons.Information, Text = "Network Recovery", ContextMenuStrip = menu, Visible = true };
+            icon = new NotifyIcon { Icon = AppIcons.Application, Text = "Network Recovery", ContextMenuStrip = menu, Visible = true };
             icon.DoubleClick += delegate { OpenSettings(); };
             timer.Interval = 5000;
             timer.Tick += async delegate { await UpdateStatus(); };
@@ -68,7 +68,7 @@ namespace NetworkRecovery
                 if (disposed) return;
                 RefreshPauseChecks();
                 status.Text = text; icon.Text = "Network Recovery · " + text;
-                icon.Icon = text == "正常" ? SystemIcons.Information : text.StartsWith("已暫停", StringComparison.Ordinal) ? SystemIcons.Warning : SystemIcons.Application;
+                icon.Icon = AppIcons.ForStatus(text);
             }
             finally { updating = false; }
         }

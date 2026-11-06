@@ -4,6 +4,8 @@ $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $compiler)) { $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'Install .NET Framework 4.8 before building.' }
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$iconDirectory = Join-Path $OutputDirectory 'icon-resources'
+& (Join-Path $PSScriptRoot 'build-icons.ps1') -OutputDirectory $iconDirectory
 $assemblyText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src\AssemblyInfo.cs') -Raw
 $productVersion = [regex]::Match($assemblyText, 'AssemblyInformationalVersion\("([^"]+)"\)').Groups[1].Value
 if ($productVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid product version.' }
@@ -12,6 +14,10 @@ $fileName = 'NetworkRecovery-v' + $productVersion + $suffix + '.exe'
 $destination = Join-Path $OutputDirectory $fileName
 $arguments = @('/nologo','/target:winexe','/platform:anycpu','/optimize+','/utf8output',('/out:' + $destination),('/win32manifest:' + (Join-Path $PSScriptRoot 'src\app.manifest')),'/reference:System.dll','/reference:System.Core.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll','/reference:System.Xml.dll','/reference:System.Net.Http.dll','/reference:System.Management.dll','/reference:System.Security.dll','/reference:Microsoft.CSharp.dll')
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter *.cs | ForEach-Object { $_.FullName })
+$arguments += '/win32icon:' + (Join-Path $iconDirectory 'NetworkRecovery.App.ico')
+foreach ($iconName in @('App','Enabled','Disabled')) {
+    $arguments += '/resource:' + (Join-Path $iconDirectory ('NetworkRecovery.' + $iconName + '.ico')) + ',NetworkRecovery.Icons.' + $iconName + '.ico'
+}
 & $compiler $arguments
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 if ([Diagnostics.FileVersionInfo]::GetVersionInfo($destination).ProductVersion -ne $productVersion) { throw 'Built product version mismatch.' }

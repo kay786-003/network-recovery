@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'tests\documentation.ps1')
 & (Join-Path $PSScriptRoot 'build.ps1') -Release:$Release
 $dist = Join-Path $PSScriptRoot 'dist'
-$sourceFiles = @('src','tests','docs','.github','.gitignore','.gitattributes','.editorconfig','AGENTS.md','README.md','CHANGELOG.md','CONTRIBUTING.md','SECURITY.md','NetworkRecovery.csproj','build.ps1','package.ps1','release.ps1') | ForEach-Object { Join-Path $PSScriptRoot $_ }
+$sourceFiles = @('src','tests','docs','.github','.gitignore','.gitattributes','.editorconfig','AGENTS.md','README.md','CHANGELOG.md','CONTRIBUTING.md','SECURITY.md','NetworkRecovery.csproj','build.ps1','build-icons.ps1','package.ps1','release.ps1') | ForEach-Object { Join-Path $PSScriptRoot $_ }
 # Explicit allowlist prevents old local diagnostics/settings from entering a public package.
 # Include the full registered docs/ set so the issue register ships in the source archive.
 Compress-Archive -LiteralPath $sourceFiles -DestinationPath (Join-Path $dist 'NetworkRecovery-source.zip') -Force

@@ -48,6 +48,7 @@ namespace NetworkRecovery
             SuspendLayout();
             preview = previewMode;
             Text = "Network Recovery · 連線守護";
+            Icon = AppIcons.Application;
             Font = new Font("Microsoft JhengHei UI", 9F);
             BackColor = Color.FromArgb(244, 247, 251);
             ForeColor = ink;

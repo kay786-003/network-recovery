@@ -55,3 +55,9 @@ $settingsExe = Join-Path $folder 'SettingsWindowInstanceChecks.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Settings instance test compilation failed.' }
 & $settingsExe
 if ($LASTEXITCODE -ne 0) { throw 'Settings instance tests failed.' }
+
+$iconsExe = Join-Path $folder 'IconResourceChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Drawing.dll /reference:System.Windows.Forms.dll ('/reference:' + $application) ('/out:' + $iconsExe) (Join-Path $PSScriptRoot 'IconResourceChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Icon resource test compilation failed.' }
+& $iconsExe (Join-Path $folder 'icons-preview.png')
+if ($LASTEXITCODE -ne 0) { throw 'Icon resource checks failed.' }
