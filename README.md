@@ -18,6 +18,8 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 - 目標 Wi-Fi 不在範圍但看得到其他網路時，持續掃描並重試 Windows 已儲存、可連線的 Wi-Fi；沒有任何可見 SSID 時才繼續網卡修復流程。
 - 「監控工具」只有「備份」、「還原備份」、「一鍵修復並重設」、「移除備份」四個按鈕。修復需明確確認，先驗證或建立可還原的 Proxy、Winsock 與 IP 備份。
 
+已生成透明 PNG 圖標素材（1254×1254，尚未嵌入 EXE 或系統匣）：[EXE 圖標](src/assets/icons/network-recovery-app-v1.png)、[啟用圖標](src/assets/icons/network-recovery-enabled-v1.png)、[停用圖標](src/assets/icons/network-recovery-disabled-v1.png)。[生成提示詞](src/assets/icons/generation-prompts-v1.json) 一併保存。
+
 仍只設定一張網卡與一個主要 Wi-Fi；其他候選只來自 Windows 已儲存設定，主要 Wi-Fi 優先，其餘依設定名稱排序輪流重試。自訂多 Wi-Fi 優先順序與時間設定尚未實作。
 
 ## 使用
