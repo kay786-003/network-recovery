@@ -65,6 +65,10 @@ v0.2.0 發行準備與圖標嵌入驗證（2026-11-07）：同步產品版本 0.
 
 v0.2.0 發行工作與 v0.2.1 修正（2026-11-07）：最新功能提交的 GitHub 一般 Windows 建置通過，但 v0.2.0 標籤的發行工作於執行 release.ps1 前解析失敗，原因是英文 Windows PowerShell 將無 BOM 的中文 UTF-8 誤讀為本機 ANSI。附件尚未發布，保留 v0.2.0 標籤並改以 v0.2.1 發行；release.ps1 補上 UTF-8 BOM，新增公開腳本編碼檢查及 EditorConfig 規則。不 force push、移動或刪除既有標籤。v0.2.1 的 release.ps1 已在本機通過完整建置與測試，包含 7 份 PowerShell 腳本的編碼／語法檢查及 108 項嵌入圖標檢查；產品、assembly、檔案版本與封裝檔名一致，原始碼包的發行腳本帶 UTF-8 BOM，公開附件校驗值及本機資料排除檢查通過。
 
+v0.2.1 公開發布確認（2026-11-07）：GitHub Windows 一般建置及發行工作均成功，發行標籤 v0.2.1 指向提交 4c03fa3343c006d5eae5f4817168f4a7e0e03b49。公開 Release 保留 prerelease=true，提供 NetworkRecovery-v0.2.1.exe、Windows ZIP、原始碼 ZIP 及 SHA256SUMS.txt 四個非空附件。已下載公開 EXE 與校驗檔，核對三個附件的 GitHub SHA-256 digest 與校驗檔一致，下載 EXE 的實際 SHA-256、產品版本 0.2.1 及檔案版本 0.2.1.0 正確。
+
+發行頁面：[v0.2.1](https://github.com/kay786-003/network-recovery/releases/tag/v0.2.1)；成功的發行工作：[42252047834](https://github.com/kay786-003/network-recovery/actions/runs/42252047834)。此發布及下載檢查沒有安裝正式監控、寫入真實 Wi-Fi、修改網卡或重啟電腦；未完成的實機項目仍保留上述限制。
+
 ## 使用者驗收
 
 在電腦旁、已儲存工作的情況下開啟 EXE，選擇網卡與 Wi-Fi，再按「儲存並啟用」。先確認關閉視窗後背景排程仍為執行中，再安排實際斷網與開機恢復測試。新 Wi-Fi 的正確與錯誤密碼、公司驗證及硬體／驅動差異，需要在實際使用的電腦驗收。
