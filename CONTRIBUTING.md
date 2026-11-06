@@ -6,7 +6,7 @@
 
 ## 開發環境
 
-使用 Windows PowerShell、Windows Git 與 .NET Framework 4.8。此專案以 Framework C# 編譯器建置，不需要 .NET SDK 或 NuGet 套件；語法維持 C# 5。Visual Studio 可開啟根目錄 `NetworkRecovery.csproj`。
+使用 Windows PowerShell、Windows Git 與 .NET Framework 4.8。此專案以 Framework C# 編譯器建置，不需要 .NET SDK 或 NuGet 套件；語法維持 C# 5。PowerShell 腳本使用 UTF-8 BOM（ASCII-only 腳本可無 BOM），避免 Windows PowerShell 5.1 在不同系統語系誤讀中文；tests/powershell-encoding.ps1 會檢查公開腳本。Visual Studio 可開啟根目錄 `NetworkRecovery.csproj`。
 
 ## 變更流程
 

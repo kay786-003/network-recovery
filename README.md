@@ -2,7 +2,7 @@
 
 Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之後在背景偵測實際上網狀態，必要時修復網卡或重新啟動電腦。
 
-**下載：[v0.2.0 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.2.0)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
+**下載：[v0.2.1 預發行版本](https://github.com/kay786-003/network-recovery/releases/tag/v0.2.1)**。可直接下載 EXE，或下載 Windows 壓縮包。支援 Windows 10/11；需要 .NET Framework 4.8 Runtime 及管理員權限。尚未安裝時，請先從 [Microsoft 官方頁面下載 .NET Framework 4.8 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)。
 
 ![首次設定示範畫面](docs/preview.png)
 
@@ -18,7 +18,7 @@ Windows 自動斷網修復工具。第一次執行時選擇網卡與 Wi-Fi，之
 - 目標 Wi-Fi 不在範圍但看得到其他網路時，持續掃描並重試 Windows 已儲存、可連線的 Wi-Fi；沒有任何可見 SSID 時才繼續網卡修復流程。
 - 「監控工具」只有「備份」、「還原備份」、「一鍵修復並重設」、「移除備份」四個按鈕。修復需明確確認，先驗證或建立可還原的 Proxy、Winsock 與 IP 備份。
 
-v0.2.0 已嵌入自訂圖標：EXE 與視窗為藍色、監控啟用為綠色、暫停／停止為灰色。圖標支援 16～256 像素九種尺寸，隨單一 EXE 發行。透明 PNG 原圖（1254×1254）：[EXE 圖標](src/assets/icons/network-recovery-app-v1.png)、[啟用圖標](src/assets/icons/network-recovery-enabled-v1.png)、[停用圖標](src/assets/icons/network-recovery-disabled-v1.png)。[生成提示詞](src/assets/icons/generation-prompts-v1.json) 一併保存。
+v0.2.1 已嵌入自訂圖標：EXE 與視窗為藍色、監控啟用為綠色、暫停／停止為灰色。圖標支援 16～256 像素九種尺寸，隨單一 EXE 發行。透明 PNG 原圖（1254×1254）：[EXE 圖標](src/assets/icons/network-recovery-app-v1.png)、[啟用圖標](src/assets/icons/network-recovery-enabled-v1.png)、[停用圖標](src/assets/icons/network-recovery-disabled-v1.png)。[生成提示詞](src/assets/icons/generation-prompts-v1.json) 一併保存。
 
 仍只設定一張網卡與一個主要 Wi-Fi；其他候選只來自 Windows 已儲存設定，主要 Wi-Fi 優先，其餘依設定名稱排序輪流重試。自訂多 Wi-Fi 優先順序與時間設定尚未實作。
 
@@ -46,9 +46,9 @@ v0.2.0 已嵌入自訂圖標：EXE 與視窗為藍色、監控啟用為綠色、
 | 修復完成後再等 60 秒仍無法上網 | 重新啟動電腦 |
 | 開機後持續無法上網 | 前 5 分鐘觀察連線；等待結束後觸發修復，再等 60 秒決定是否重新啟動 |
 
-檢查的是多個外部服務的實際回應，因此 Wi-Fi 顯示已連線卻無法上網，也會觸發流程。間隔有數秒的檢測及 Windows 操作延遲。v0.2.0 已實作 D0007：任意連續 4 小時最多重啟 5 次；外網檢查成功即歸零。達到上限後仍持續修復網卡與重新連線，額度隨各筆重啟紀錄到期恢復。計數只保存在目前這台電腦，重開機後繼續沿用，不同步到其他電腦。v0.1.1 及更舊附件沒有此重啟上限。
+檢查的是多個外部服務的實際回應，因此 Wi-Fi 顯示已連線卻無法上網，也會觸發流程。間隔有數秒的檢測及 Windows 操作延遲。v0.2.1 已實作 D0007：任意連續 4 小時最多重啟 5 次；外網檢查成功即歸零。達到上限後仍持續修復網卡與重新連線，額度隨各筆重啟紀錄到期恢復。計數只保存在目前這台電腦，重開機後繼續沿用，不同步到其他電腦。v0.1.1 及更舊附件沒有此重啟上限。
 
-v0.2.0 包含下列已實作的決策（v0.1.1 及更舊附件不具備）：
+v0.2.1 包含下列已實作的決策（v0.1.1 及更舊附件不具備）：
 
 | 已決定的行為 | 決策 |
 | --- | --- |
@@ -85,7 +85,7 @@ v0.2.0 包含下列已實作的決策（v0.1.1 及更舊附件不具備）：
 | 手動修復備份（僅管理員／SYSTEM 可讀寫） | `%ProgramData%\NetworkRecovery\repair-backup` |
 | Windows 工作排程名稱 | `NetworkRecovery Monitor`、`NetworkRecovery Tray` |
 
-若出現「無法保護安裝路徑」，表示設定安裝資料夾權限失敗；v0.2.0 已修正既有目錄控制代碼造成的共用衝突，錯誤訊息也會顯示 Windows 錯誤碼與說明。請以最新預發行版本重試；若仍失敗，提供錯誤碼即可，不必公開設定或私人日誌。
+若出現「無法保護安裝路徑」，表示設定安裝資料夾權限失敗；v0.2.1 已修正既有目錄控制代碼造成的共用衝突，錯誤訊息也會顯示 Windows 錯誤碼與說明。請以最新預發行版本重試；若仍失敗，提供錯誤碼即可，不必公開設定或私人日誌。
 
 應用檔案與設定僅供管理員及 SYSTEM 修改。設定檔只有網卡識別碼、Wi-Fi 設定名稱及時間，沒有 Wi-Fi 密碼。
 
@@ -103,7 +103,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 輸出為 `dist/NetworkRecovery-v<產品版本>-dev-<建置時間>.exe` 及 SHA-256 摘要；`dist/current-build.txt` 記錄這次產物檔名。正式發行由 `release.ps1` 產生不含 dev 後綴的版本化 EXE，Windows ZIP 內檔名亦一致。也可透過 Visual Studio 開啟 `NetworkRecovery.csproj`。圖標由 `build-icons.ps1` 離線轉為 ICO 並嵌入 EXE，不必另帶圖標檔。EXE 尚未做發行者數位簽章。
 
-維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.2.0` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
+維護者使用 `powershell -NoProfile -ExecutionPolicy Bypass -File .\release.ps1 -Version 0.2.1` 準備版本化附件；此指令只做本地驗證與封裝，不會發布。附件固定放在 `dist/releases/v<版本>/`。推送對應的 `v<版本>` 標籤後，`.github/workflows/release.yml` 會重新驗證並發布預發行 Release。
 
 執行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1` 可檢查 Wi-Fi XML、密碼與啟動策略，唯讀查詢工作排程器，並短暫開啟示範視窗檢查按鈕遮擋與縮放（請先執行 build.ps1），不會儲存 Wi-Fi、操作網卡、安裝排程或重新啟動。
 
@@ -151,6 +151,6 @@ dist/                    建置產物
 
 ## 版本與後續工作
 
-v0.2.0 仍標記為預發行：使用者已回報先前斷網修復／重啟及安裝路徑錯誤修正成功；目前版本的開機觸發、暫停到期、跨重啟額度、進階重設／還原與完整升級還原仍待實機驗收。
+v0.2.1 仍標記為預發行：使用者已回報先前斷網修復／重啟及安裝路徑錯誤修正成功；目前版本的開機觸發、暫停到期、跨重啟額度、進階重設／還原與完整升級還原仍待實機驗收。
 
-目前 GitHub 預發行版本為 `v0.2.0`，EXE 產品版本為 `0.2.0`、檔案／manifest 版本為 `0.2.0.0`，在第一階段基礎上包含已授權的第二／第三階段功能。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。D0007～D0014 已納入 v0.2.0；D0009、D0010 維持既有單一外網判定及關閉睡眠前提。自訂多 Wi-Fi 優先順序與可調時間仍未實作。隔離測試不等於已完成掃描／重連、暫停、升級或進階修復還原的實機驗收。
+目前 GitHub 預發行版本為 `v0.2.1`，EXE 產品版本為 `0.2.1`、檔案／manifest 版本為 `0.2.1.0`，在第一階段基礎上包含已授權的第二／第三階段功能。程式碼、文件和測試的通過狀態不等於已完成所有實機驗收。D0007～D0014 已納入 v0.2.1；D0009、D0010 維持既有單一外網判定及關閉睡眠前提。自訂多 Wi-Fi 優先順序與可調時間仍未實作。隔離測試不等於已完成掃描／重連、暫停、升級或進階修復還原的實機驗收。
