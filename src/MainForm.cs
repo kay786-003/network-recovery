@@ -12,24 +12,32 @@ namespace NetworkRecovery
 {
     public sealed class MainForm : Form
     {
-        readonly Color ink = Color.FromArgb(24, 38, 56);
-        readonly Color muted = Color.FromArgb(99, 114, 134);
-        readonly Color blue = Color.FromArgb(37, 99, 235);
+        const string FontName = "Microsoft JhengHei UI";
+        readonly Color ink = Color.FromArgb(226, 235, 248);
+        readonly Color muted = Color.FromArgb(127, 146, 176);
+        readonly Color blue = Color.FromArgb(34, 211, 238);
+        readonly Color line = Color.FromArgb(34, 52, 82);
         readonly bool preview;
+        readonly float scale;
         readonly Panel content = new Panel();
-        Size contentMinimum;
+        TableLayoutPanel root;
+        TableLayoutPanel body;
+        Card adapterCard;
+        Card wifiCard;
+        bool wideLayout;
+        bool layoutReady;
         readonly ListView adapters = new ListView();
         readonly ComboBox networks = new ComboBox();
-        readonly CheckBox reconnect = new CheckBox();
-        readonly CheckBox autoConnect = new CheckBox();
-        readonly CheckBox showPassword = new CheckBox();
-        readonly CheckBox replacePassword = new CheckBox();
+        readonly CheckBox reconnect = new PlainCheckBox();
+        readonly CheckBox autoConnect = new PlainCheckBox();
+        readonly CheckBox showPassword = new PlainCheckBox();
+        readonly CheckBox replacePassword = new PlainCheckBox();
         readonly TextBox password = new TextBox();
         readonly Label passwordLabel = new Label();
-        readonly Label wifiInfo = new Label();
-        readonly Label adapterInfo = new Label();
-        readonly Label status = new Label();
-        readonly Label notice = new Label();
+        readonly Label wifiInfo = new WrapLabel();
+        readonly Label adapterInfo = new WrapLabel();
+        readonly Label status = new WrapLabel();
+        readonly Label notice = new WrapLabel();
         readonly Button start = new Button();
         readonly Button stop = new Button();
         readonly Button refreshAdapters = new Button();
@@ -46,23 +54,26 @@ namespace NetworkRecovery
         {
             SuspendLayout();
             preview = previewMode;
+            using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) scale = g.DpiX / 96F;
             Text = "Network Recovery · 連線守護";
-            Font = new Font("Microsoft JhengHei UI", 9F);
-            BackColor = Color.FromArgb(244, 247, 251);
+            Font = new Font(FontName, 9F);
+            BackColor = Color.FromArgb(9, 14, 26);
             ForeColor = ink;
-            ClientSize = new Size(1080, 790);
-            MinimumSize = new Size(640, 480);
+            // Every pixel value goes through S(); fonts are point-based, so text and layout scale together.
+            AutoScaleMode = AutoScaleMode.None;
+            ClientSize = new Size(S(1000), S(680));
+            MinimumSize = new Size(S(360), S(300));
             StartPosition = FormStartPosition.CenterScreen;
-            AutoScaleDimensions = new SizeF(96F, 96F);
-            AutoScaleMode = AutoScaleMode.Dpi;
             AutoScroll = true;
+            content.Location = Point.Empty;
             content.Size = ClientSize;
             Controls.Add(content);
             content.SuspendLayout();
             BuildLayout();
-            content.ResumeLayout(false);
+            content.ResumeLayout(true);
             ResumeLayout(false);
             adapters.SelectedIndexChanged += delegate { if (!populating) AdapterChanged(); };
+            adapters.SizeChanged += delegate { FitAdapterColumns(); };
             networks.SelectedIndexChanged += delegate { if (!loading) NetworkChanged(); };
             reconnect.CheckedChanged += delegate { UpdateWifiControls(); };
             showPassword.CheckedChanged += delegate { password.UseSystemPasswordChar = !showPassword.Checked; };
@@ -86,17 +97,15 @@ namespace NetworkRecovery
             };
         }
 
+        int S(int value) { return (int)Math.Round(value * scale); }
+
         protected override void OnLoad(EventArgs e)
         {
-            // Preserve the scaled design canvas and scroll on smaller desktops.
-            contentMinimum = content.Size;
-            float dpiScale = CurrentAutoScaleDimensions.Width / 96F;
-            adapters.Columns[0].Width = (int)(165 * dpiScale);
-            adapters.Columns[1].Width = (int)(90 * dpiScale);
-            adapters.Columns[2].Width = (int)(90 * dpiScale);
+            // Never open larger than the usable desktop; smaller windows scroll instead of overlapping.
             Rectangle area = Screen.FromControl(this).WorkingArea;
             Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
             Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
+            layoutReady = true;
             ResizeContent();
             base.OnLoad(e);
         }
@@ -107,111 +116,286 @@ namespace NetworkRecovery
             ResizeContent();
         }
 
+        // Two columns on wide windows, stacked cards on narrow ones; below the minimum the form scrolls.
         void ResizeContent()
         {
-            if (contentMinimum.IsEmpty) return;
-            content.Size = new Size(Math.Max(contentMinimum.Width, ClientSize.Width),
-                Math.Max(contentMinimum.Height, ClientSize.Height));
+            if (!layoutReady) return;
+            int available = ClientSize.Width + (VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
+            bool wide = available >= S(900);
+            Size minimum = wide ? new Size(S(860), S(700)) : new Size(S(420), S(1080));
+            SuspendLayout();
+            content.SuspendLayout();
+            if (wide != wideLayout) ApplyBodyMode(wide);
+            content.Size = new Size(Math.Max(minimum.Width, ClientSize.Width), Math.Max(minimum.Height, ClientSize.Height));
+            // Very wide screens keep a readable column instead of stretching the cards edge to edge.
+            int rootWidth = Math.Min(content.Width, S(1240));
+            root.SetBounds((content.Width - rootWidth) / 2, 0, rootWidth, content.Height);
+            content.ResumeLayout(true);
+            ResumeLayout(true);
+            // Wrapped labels fix their height once they know their width; a second pass lets rows settle.
+            content.PerformLayout();
         }
 
-        Label TextLabel(Control parent, string text, int x, int y, int w, int h, float size, Color color, bool bold)
+        void ApplyBodyMode(bool wide)
         {
-            Label label = new Label { Text = text, Location = new Point(x, y), Size = new Size(w, h), ForeColor = color,
-                Font = new Font("Microsoft JhengHei UI", size, bold ? FontStyle.Bold : FontStyle.Regular) };
-            parent.Controls.Add(label); return label;
+            wideLayout = wide;
+            body.SuspendLayout();
+            body.Controls.Clear(); body.ColumnStyles.Clear(); body.RowStyles.Clear();
+            if (wide)
+            {
+                body.ColumnCount = 2; body.RowCount = 1;
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60F));
+                body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+                adapterCard.Margin = new Padding(0, 0, S(7), 0); wifiCard.Margin = new Padding(S(7), 0, 0, 0);
+                body.Controls.Add(adapterCard, 0, 0); body.Controls.Add(wifiCard, 1, 0);
+            }
+            else
+            {
+                body.ColumnCount = 1; body.RowCount = 2;
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                body.RowStyles.Add(new RowStyle(SizeType.Percent, 42F));
+                body.RowStyles.Add(new RowStyle(SizeType.Percent, 58F));
+                adapterCard.Margin = new Padding(0, 0, 0, S(7)); wifiCard.Margin = new Padding(0, S(7), 0, 0);
+                body.Controls.Add(adapterCard, 0, 0); body.Controls.Add(wifiCard, 0, 1);
+            }
+            body.ResumeLayout(true);
+        }
+
+        void FitAdapterColumns()
+        {
+            if (adapters.Columns.Count < 3) return;
+            int total = adapters.ClientSize.Width;
+            if (total <= 0) return;
+            int first = (int)(total * 0.46), second = (int)(total * 0.24);
+            adapters.Columns[0].Width = first; adapters.Columns[1].Width = second;
+            adapters.Columns[2].Width = Math.Max(S(40), total - first - second);
+        }
+
+        // Single-line text that sizes itself from its font.
+        Label Text1(string text, float size, Color color, bool bold)
+        {
+            return new Label { Text = text, AutoSize = true, ForeColor = color, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
+                Font = new Font(FontName, size, bold ? FontStyle.Bold : FontStyle.Regular) };
+        }
+
+        // Paragraph text that wraps to the width of its cell and grows the row instead of overlapping neighbours.
+        WrapLabel Para(string text, float size, Color color, bool bold)
+        {
+            return new WrapLabel { Text = text, ForeColor = color, Dock = DockStyle.Fill, Margin = Padding.Empty,
+                Font = new Font(FontName, size, bold ? FontStyle.Bold : FontStyle.Regular) };
         }
 
         void StyleButton(Button button, string text, bool primary)
         {
             button.Text = text; button.FlatStyle = FlatStyle.Flat; button.Cursor = Cursors.Hand;
+            button.AutoSize = true; button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.MinimumSize = new Size(S(primary ? 150 : 104), S(40));
+            button.Padding = new Padding(S(14), S(4), S(14), S(4));
+            button.Margin = Padding.Empty;
             button.FlatAppearance.BorderSize = primary ? 0 : 1;
-            button.FlatAppearance.BorderColor = Color.FromArgb(213, 222, 235);
-            button.BackColor = primary ? blue : Color.White;
-            button.ForeColor = primary ? Color.White : ink;
-            button.Font = new Font("Microsoft JhengHei UI", 9.5F, FontStyle.Bold);
+            button.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112);
+            button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(103, 232, 249) : Color.FromArgb(30, 45, 76);
+            button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(6, 182, 212) : Color.FromArgb(38, 56, 92);
+            button.Font = new Font(FontName, 9.5F, FontStyle.Bold);
             button.UseVisualStyleBackColor = false;
+            Action paint = delegate {
+                button.BackColor = button.Enabled ? (primary ? blue : Color.FromArgb(20, 30, 50)) : Color.FromArgb(22, 32, 50);
+                button.ForeColor = button.Enabled ? (primary ? Color.FromArgb(4, 18, 32) : ink) : Color.FromArgb(88, 104, 130);
+            };
+            button.EnabledChanged += delegate { paint(); };
+            paint();
         }
 
         void BuildLayout()
         {
-            Panel brand = new Panel { BackColor = blue, Location = new Point(28, 27), Size = new Size(38, 38) };
+            root = new TableLayoutPanel {
+                ColumnCount = 1, RowCount = 5, Margin = Padding.Empty,
+                Padding = new Padding(S(24), S(18), S(24), S(18))
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            content.Controls.Add(root);
+
+            // Header: brand mark, product name and administrator badge.
+            TableLayoutPanel header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, S(14)) };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Panel brand = new Panel { BackColor = blue, Size = new Size(S(42), S(42)), Margin = new Padding(0, 0, S(12), 0), Anchor = AnchorStyles.Left };
             brand.Paint += delegate(object sender, PaintEventArgs e) {
                 e.Graphics.ScaleTransform(brand.ClientSize.Width / 38F, brand.ClientSize.Height / 38F);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (Pen p = new Pen(Color.White, 2F)) {
+                using (Pen p = new Pen(Color.FromArgb(4, 18, 32), 2F)) {
                     e.Graphics.DrawArc(p, 7, 7, 23, 23, 214, 112);
                     e.Graphics.DrawArc(p, 12, 14, 13, 13, 210, 120);
                 }
-                e.Graphics.FillEllipse(Brushes.White, 17, 25, 4, 4);
+                e.Graphics.FillEllipse(Brushes.Black, 17, 25, 4, 4);
             };
-            content.Controls.Add(brand);
-            TextLabel(content, "NETWORK RECOVERY", 78, 26, 330, 25, 12F, ink, true);
-            TextLabel(content, "連線守護", 78, 52, 300, 20, 9F, muted, false);
-            Label tag = TextLabel(content, "管理員模式", 915, 36, 128, 28, 9F, blue, true);
-            tag.TextAlign = ContentAlignment.MiddleCenter; tag.BackColor = Color.FromArgb(228, 237, 255);
-            tag.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            TextLabel(content, "讓連線自行恢復。", 28, 88, 800, 39, 22F, ink, true);
-            TextLabel(content, "選擇要保護的網卡，設定斷網後的 Wi-Fi 重連方式。", 30, 136, 970, 26, 10F, muted, false);
+            TableLayoutPanel titles = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
+            titles.Controls.Add(Text1("NETWORK RECOVERY", 13F, ink, true), 0, 0);
+            titles.Controls.Add(Text1("連線守護 · 斷網時讓連線自行恢復", 9F, muted, false), 0, 1);
+            Label tag = Text1("管理員模式", 9F, blue, true);
+            tag.BackColor = Color.FromArgb(10, 52, 68); tag.Padding = new Padding(S(12), S(5), S(12), S(5)); tag.Anchor = AnchorStyles.Right;
+            header.Controls.Add(brand, 0, 0); header.Controls.Add(titles, 1, 0); header.Controls.Add(tag, 2, 0);
+            root.Controls.Add(header, 0, 0);
 
-            Card left = new Card { Location = new Point(28, 181), Size = new Size(420, 397), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
-            Card right = new Card { Location = new Point(464, 181), Size = new Size(588, 397), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            content.Controls.Add(left); content.Controls.Add(right);
-            TextLabel(left, "01  選擇網卡", 20, 20, 260, 30, 13F, ink, true);
-            StyleButton(refreshAdapters, "重新整理", false); refreshAdapters.SetBounds(307, 18, 92, 33); left.Controls.Add(refreshAdapters);
-            TextLabel(left, "所有網卡都會列出，包含 VPN 與虛擬網卡。", 20, 57, 380, 25, 9F, muted, false);
-            adapters.SetBounds(20, 91, 379, 222);
-            adapters.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            // Status banner: always visible at the top so the monitoring state is the first thing read.
+            Card banner = new Card(new Padding(S(20), S(12), S(20), S(12)), blue) { AutoSize = true, Margin = new Padding(0, 0, 0, S(14)) };
+            banner.RowCount = 1; banner.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            status.Font = new Font(FontName, 10F, FontStyle.Bold); status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
+            banner.Controls.Add(status, 0, 0);
+            root.Controls.Add(banner, 0, 1);
+
+            // Body: adapter card and Wi-Fi card.
+            body = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+            adapterCard = BuildAdapterCard();
+            wifiCard = BuildWifiCard();
+            ApplyBodyMode(true);
+            root.Controls.Add(body, 0, 2);
+
+            // Protection flow summary.
+            Card flow = new Card(new Padding(S(20), S(12), S(20), S(12)), Color.Empty) { AutoSize = true, Margin = new Padding(0, S(14), 0, S(14)) };
+            flow.RowCount = 3;
+            for (int i = 0; i < 3; i++) flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Label flowTitle = Para("目前的保護流程", 9F, muted, true); flowTitle.Margin = new Padding(0, 0, 0, S(3));
+            flow.Controls.Add(flowTitle, 0, 0);
+            flow.Controls.Add(Para("斷網 3 分鐘 → 修復網卡 → 再等 60 秒 → 重啟電腦", 10.5F, blue, true), 0, 1);
+            Label flowNote = Para("開機後給網路 5 分鐘恢復；持續無網將再次觸發修復。", 9F, muted, false); flowNote.Margin = new Padding(0, S(3), 0, 0);
+            flow.Controls.Add(flowNote, 0, 2);
+            root.Controls.Add(flow, 0, 3);
+
+            // Footer: notice on top, buttons below. Rows can only grow downward, so nothing can cover a button.
+            TableLayoutPanel footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 2, Margin = Padding.Empty };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            footer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            notice.ForeColor = muted; notice.Dock = DockStyle.Fill; notice.Margin = new Padding(0, 0, 0, S(10));
+            notice.Text = "啟用後會在背景持續運作。自動重啟會關閉程式，請定期儲存工作。";
+            footer.Controls.Add(notice, 0, 0); footer.SetColumnSpan(notice, 3);
+            Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
+                Padding = new Padding(S(2), S(6), S(10), S(6)), Font = new Font(FontName, 9F, FontStyle.Underline) };
+            settings.FlatAppearance.BorderSize = 0; settings.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
+            settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
+            footer.Controls.Add(settings, 0, 1);
+            StyleButton(stop, "停止監控", false); stop.Anchor = AnchorStyles.Right; stop.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(stop, 1, 1);
+            StyleButton(start, "儲存並啟用", true); start.Anchor = AnchorStyles.Right; start.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(start, 2, 1);
+            root.Controls.Add(footer, 0, 4);
+            StyleDark();
+            UpdateWifiControls();
+        }
+
+        // Dark "console" styling for inputs and the adapter list (owner-drawn so the header is dark too).
+        void StyleDark()
+        {
+            Color field = Color.FromArgb(9, 14, 26), card = Color.FromArgb(16, 24, 41), sel = Color.FromArgb(12, 62, 80);
+            networks.FlatStyle = FlatStyle.Flat; networks.BackColor = field; networks.ForeColor = ink;
+            networks.DrawMode = DrawMode.OwnerDrawFixed; networks.ItemHeight = S(22);
+            networks.DrawItem += delegate(object s, DrawItemEventArgs e) {
+                if (e.Index < 0) return;
+                bool hot = (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
+                using (SolidBrush b = new SolidBrush(hot ? sel : field)) e.Graphics.FillRectangle(b, e.Bounds);
+                TextRenderer.DrawText(e.Graphics, networks.GetItemText(networks.Items[e.Index]), networks.Font,
+                    new Rectangle(e.Bounds.X + S(4), e.Bounds.Y, e.Bounds.Width - S(4), e.Bounds.Height), networks.Enabled ? ink : muted,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            };
+            password.BackColor = field; password.ForeColor = ink; password.BorderStyle = BorderStyle.FixedSingle;
+            foreach (CheckBox box in new[] { reconnect, autoConnect, showPassword, replacePassword }) { box.FlatStyle = FlatStyle.Flat; box.ForeColor = ink; box.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112); }
+            adapters.BackColor = field; adapters.ForeColor = ink; adapters.BorderStyle = BorderStyle.FixedSingle;
+            adapters.OwnerDraw = true;
+            adapters.DrawColumnHeader += delegate(object s, DrawListViewColumnHeaderEventArgs e) {
+                using (SolidBrush b = new SolidBrush(card)) e.Graphics.FillRectangle(b, e.Bounds);
+                using (Pen p = new Pen(line)) e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, adapters.Font, new Rectangle(e.Bounds.X + S(6), e.Bounds.Y, e.Bounds.Width - S(6), e.Bounds.Height), muted,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            };
+            adapters.DrawItem += delegate(object s, DrawListViewItemEventArgs e) { };
+            adapters.DrawSubItem += delegate(object s, DrawListViewSubItemEventArgs e) {
+                Rectangle row = new Rectangle(e.Bounds.X, e.Bounds.Y, e.Bounds.Width, e.Bounds.Height);
+                using (SolidBrush b = new SolidBrush(e.Item.Selected ? sel : field)) e.Graphics.FillRectangle(b, row);
+                if (e.Item.Selected && e.ColumnIndex == 0) using (SolidBrush a = new SolidBrush(blue)) e.Graphics.FillRectangle(a, row.X, row.Y, 3, row.Height);
+                Color text = e.ColumnIndex == 0 ? ink : muted;
+                if (e.ColumnIndex == 2) text = e.SubItem.Text == "已連線" ? Color.FromArgb(74, 222, 128) : muted;
+                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, adapters.Font, new Rectangle(row.X + S(6), row.Y, row.Width - S(6), row.Height), text,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            };
+        }
+
+        Card BuildAdapterCard()
+        {
+            Card card = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty);
+            card.ColumnCount = 2; card.RowCount = 4;
+            card.ColumnStyles.Clear();
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.Controls.Add(Text1("01  選擇網卡", 13F, ink, true), 0, 0);
+            StyleButton(refreshAdapters, "重新整理", false); refreshAdapters.Anchor = AnchorStyles.Right; card.Controls.Add(refreshAdapters, 1, 0);
+            Label hint = Para("所有網卡都會列出，包含 VPN 與虛擬網卡。", 9F, muted, false); hint.Margin = new Padding(0, S(6), 0, S(10));
+            card.Controls.Add(hint, 0, 1); card.SetColumnSpan(hint, 2);
+            adapters.Dock = DockStyle.Fill; adapters.Margin = Padding.Empty; adapters.MinimumSize = new Size(0, S(90));
             adapters.View = View.Details; adapters.FullRowSelect = true; adapters.HideSelection = false; adapters.MultiSelect = false;
             adapters.BorderStyle = BorderStyle.FixedSingle; adapters.HeaderStyle = ColumnHeaderStyle.Nonclickable;
             adapters.ShowItemToolTips = true;
-            adapters.Columns.Add("網卡", 165); adapters.Columns.Add("類型", 90); adapters.Columns.Add("狀態", 90);
-            left.Controls.Add(adapters);
-            adapterInfo.SetBounds(20, 327, 379, 49); adapterInfo.ForeColor = muted; adapterInfo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            adapterInfo.Text = "選擇實際用來上網的網卡。"; left.Controls.Add(adapterInfo);
+            adapters.Columns.Add("網卡", S(160)); adapters.Columns.Add("類型", S(90)); adapters.Columns.Add("狀態", S(90));
+            card.Controls.Add(adapters, 0, 2); card.SetColumnSpan(adapters, 2);
+            adapterInfo.Dock = DockStyle.Fill; adapterInfo.ForeColor = muted; adapterInfo.Margin = new Padding(0, S(10), 0, 0);
+            adapterInfo.Text = "選擇實際用來上網的網卡。";
+            card.Controls.Add(adapterInfo, 0, 3); card.SetColumnSpan(adapterInfo, 2);
+            return card;
+        }
 
-            TextLabel(right, "02  Wi-Fi 重連", 20, 20, 420, 30, 13F, ink, true);
-            reconnect.Text = "斷網修復後，重新連接指定 Wi-Fi"; reconnect.SetBounds(21, 63, 540, 29); reconnect.Checked = true; right.Controls.Add(reconnect);
-            TextLabel(right, "Wi-Fi 網路", 22, 108, 300, 22, 9.5F, ink, true);
-            networks.SetBounds(22, 136, 414, 32); networks.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; networks.DropDownStyle = ComboBoxStyle.DropDownList; right.Controls.Add(networks);
-            StyleButton(refreshWifi, "重新掃描", false); refreshWifi.SetBounds(450, 133, 115, 35); refreshWifi.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(refreshWifi);
-            wifiInfo.SetBounds(22, 182, 542, 40); wifiInfo.ForeColor = muted; wifiInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; right.Controls.Add(wifiInfo);
-            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.SetBounds(22, 226, 300, 22); passwordLabel.Font = new Font(Font, FontStyle.Bold); right.Controls.Add(passwordLabel);
-            replacePassword.Text = "更新已儲存的密碼"; replacePassword.SetBounds(345, 220, 220, 28); replacePassword.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(replacePassword); replacePassword.BringToFront();
-            password.SetBounds(22, 253, 414, 28); password.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right; password.UseSystemPasswordChar = true; password.MaxLength = 64; right.Controls.Add(password);
-            showPassword.Text = "顯示密碼"; showPassword.SetBounds(450, 253, 115, 28); showPassword.Anchor = AnchorStyles.Top | AnchorStyles.Right; right.Controls.Add(showPassword);
-            autoConnect.Text = "使用 Windows 自動連線"; autoConnect.Checked = true; autoConnect.Enabled = false; autoConnect.SetBounds(22, 296, 500, 26); right.Controls.Add(autoConnect);
-            TextLabel(right, "密碼由 Windows 保存，不會寫入本應用的設定或紀錄。", 22, 338, 540, 34, 9F, muted, false).Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        Card BuildWifiCard()
+        {
+            Card card = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty);
+            card.ColumnCount = 2; card.RowCount = 10;
+            card.ColumnStyles.Clear();
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int i = 0; i < 9; i++) card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            Card timing = new Card { Location = new Point(28, 595), Size = new Size(1024, 69), Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            content.Controls.Add(timing);
-            TextLabel(timing, "目前的保護流程", 20, 22, 175, 25, 10F, ink, true);
-            TextLabel(timing, "斷網 3 分鐘 → 修復網卡 → 再等 60 秒 → 重啟電腦", 199, 15, 790, 24, 10F, blue, true);
-            TextLabel(timing, "開機後給網路 5 分鐘恢復；持續無網將再次觸發修復。", 199, 40, 790, 21, 8.5F, muted, false);
-            // Layout cells keep inherited-font scaling from making labels cover buttons.
-            TableLayoutPanel footer = new TableLayoutPanel {
-                Location = new Point(28, 675), Size = new Size(1024, 106),
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-                ColumnCount = 3, RowCount = 3, Margin = Padding.Empty, Padding = Padding.Empty
-            };
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146F));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 218F));
-            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
-            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 46F));
-            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
-            content.Controls.Add(footer);
-            status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
-            footer.Controls.Add(status, 0, 0); footer.SetColumnSpan(status, 3);
-            notice.ForeColor = muted; notice.Dock = DockStyle.Fill; notice.Margin = new Padding(0, 0, 12, 0);
-            notice.Text = "啟用後會在背景持續運作。自動重啟會關閉程式，請定期儲存工作。";
-            footer.Controls.Add(notice, 0, 1); footer.SetRowSpan(notice, 2);
-            StyleButton(stop, "停止監控", false); stop.Dock = DockStyle.Fill; stop.Margin = new Padding(16, 0, 0, 0); footer.Controls.Add(stop, 1, 1);
-            StyleButton(start, "儲存並啟用", true); start.Dock = DockStyle.Fill; start.Margin = new Padding(16, 0, 0, 0); footer.Controls.Add(start, 2, 1);
-            Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = muted, Cursor = Cursors.Hand, Dock = DockStyle.Fill, Margin = Padding.Empty };
-            settings.FlatAppearance.BorderSize = 0;
-            settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
-            footer.Controls.Add(settings, 2, 2);
-            UpdateWifiControls();
+            Label title = Text1("02  Wi-Fi 重連", 13F, ink, true); title.Margin = new Padding(0, 0, 0, S(10));
+            card.Controls.Add(title, 0, 0); card.SetColumnSpan(title, 2);
+
+            reconnect.Text = "斷網修復後，重新連接指定 Wi-Fi"; reconnect.Checked = true; reconnect.Anchor = AnchorStyles.Left; reconnect.Margin = new Padding(0, 0, 0, S(10));
+            card.Controls.Add(reconnect, 0, 1); card.SetColumnSpan(reconnect, 2);
+
+            Label networkLabel = Text1("Wi-Fi 網路", 9.5F, ink, true); networkLabel.Margin = new Padding(0, 0, 0, S(4));
+            card.Controls.Add(networkLabel, 0, 2); card.SetColumnSpan(networkLabel, 2);
+            networks.DropDownStyle = ComboBoxStyle.DropDownList; networks.Dock = DockStyle.Fill; networks.Margin = new Padding(0, 0, S(10), 0);
+            card.Controls.Add(networks, 0, 3);
+            StyleButton(refreshWifi, "重新掃描", false); refreshWifi.Anchor = AnchorStyles.Right; card.Controls.Add(refreshWifi, 1, 3);
+
+            wifiInfo.Dock = DockStyle.Fill; wifiInfo.ForeColor = muted; wifiInfo.Margin = new Padding(0, S(10), 0, S(10));
+            card.Controls.Add(wifiInfo, 0, 4); card.SetColumnSpan(wifiInfo, 2);
+
+            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.AutoSize = true; passwordLabel.Anchor = AnchorStyles.Left; passwordLabel.Margin = new Padding(0, 0, 0, S(4));
+            passwordLabel.Font = new Font(Font, FontStyle.Bold);
+            card.Controls.Add(passwordLabel, 0, 5);
+            replacePassword.Text = "更新已儲存的密碼"; replacePassword.Anchor = AnchorStyles.Right; replacePassword.Margin = Padding.Empty;
+            card.Controls.Add(replacePassword, 1, 5);
+            password.UseSystemPasswordChar = true; password.MaxLength = 64; password.Dock = DockStyle.Fill; password.Margin = new Padding(0, 0, S(10), 0);
+            card.Controls.Add(password, 0, 6);
+            showPassword.Text = "顯示密碼"; showPassword.Anchor = AnchorStyles.Right; showPassword.Margin = Padding.Empty;
+            card.Controls.Add(showPassword, 1, 6);
+
+            autoConnect.Text = "使用 Windows 自動連線"; autoConnect.Checked = true; autoConnect.AutoCheck = false; autoConnect.Anchor = AnchorStyles.Left; autoConnect.Margin = new Padding(0, S(10), 0, 0);
+            card.Controls.Add(autoConnect, 0, 7); card.SetColumnSpan(autoConnect, 2);
+
+            Label note = Para("密碼由 Windows 保存，不會寫入本應用的設定或紀錄。", 9F, muted, false); note.Margin = new Padding(0, S(12), 0, 0);
+            card.Controls.Add(note, 0, 8); card.SetColumnSpan(note, 2);
+            return card;
         }
 
         AdapterInfo SelectedAdapter { get { return adapters.SelectedItems.Count == 0 ? null : adapters.SelectedItems[0].Tag as AdapterInfo; } }
@@ -359,7 +543,7 @@ namespace NetworkRecovery
             catch { status.Text = "●  無法讀取監控狀態"; }
         }
 
-        void ShowNotice(string message, bool error) { notice.Text = message; notice.ForeColor = error ? Color.FromArgb(180, 58, 48) : muted; }
+        void ShowNotice(string message, bool error) { notice.Text = message; notice.ForeColor = error ? Color.FromArgb(255, 128, 128) : muted; }
 
         void PopulatePreview()
         {
@@ -377,13 +561,48 @@ namespace NetworkRecovery
             status.Text = "●  尚未啟用 · 完成設定後即可開始保護";
         }
 
-        sealed class Card : Panel
+        // White card with a hairline border and an optional accent bar; lays its children out as rows.
+        sealed class Card : TableLayoutPanel
         {
-            public Card() { BackColor = Color.White; DoubleBuffered = true; }
+            readonly Color accent;
+            public Card(Padding padding, Color accentColor)
+            {
+                accent = accentColor; BackColor = Color.FromArgb(16, 24, 41); DoubleBuffered = true;
+                Dock = DockStyle.Fill; ColumnCount = 1; Padding = padding; Margin = Padding.Empty;
+                if (!accentColor.IsEmpty) Padding = new Padding(padding.Left + 4, padding.Top, padding.Right, padding.Bottom);
+            }
             protected override void OnPaint(PaintEventArgs e)
             {
                 base.OnPaint(e);
-                using (Pen p = new Pen(Color.FromArgb(225, 232, 242))) e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+                using (Pen p = new Pen(Color.FromArgb(34, 52, 82))) e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+                if (!accent.IsEmpty) using (SolidBrush b = new SolidBrush(accent)) e.Graphics.FillRectangle(b, 0, 0, 4, Height);
+            }
+        }
+
+        // CheckBox that never wraps its text inside a table cell (a narrow proposed width would clip CJK text).
+        sealed class PlainCheckBox : CheckBox
+        {
+            public PlainCheckBox() { AutoSize = true; }
+            public override Size GetPreferredSize(Size proposedSize) { return base.GetPreferredSize(Size.Empty); }
+        }
+
+        // Label whose height follows its wrapped text at the width the table cell offers, so long messages
+        // push content down instead of overlapping it. It reports a tiny width so it never forces a cell wider.
+        sealed class WrapLabel : Label
+        {
+            public WrapLabel() { AutoSize = true; }
+            public override Size GetPreferredSize(Size proposedSize)
+            {
+                bool known = proposedSize.Width > 1 && proposedSize.Width < 100000;
+                int width = known ? proposedSize.Width : Math.Max(Width, 1);
+                Size text = TextRenderer.MeasureText(Text, Font, new Size(width, 100000),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top);
+                return new Size(known ? width : 1, text.Height + 2);
+            }
+            protected override void OnSizeChanged(EventArgs e)
+            {
+                base.OnSizeChanged(e);
+                if (Parent != null) Parent.PerformLayout(this, "Bounds");
             }
         }
     }
