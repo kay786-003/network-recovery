@@ -14,6 +14,7 @@ $fileName = 'NetworkRecovery-v' + $productVersion + $suffix + '.exe'
 $destination = Join-Path $OutputDirectory $fileName
 $arguments = @('/nologo','/target:winexe','/platform:anycpu','/optimize+','/utf8output',('/out:' + $destination),('/win32manifest:' + (Join-Path $PSScriptRoot 'src\app.manifest')),'/reference:System.dll','/reference:System.Core.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll','/reference:System.Xml.dll','/reference:System.Net.Http.dll','/reference:System.Management.dll','/reference:System.Security.dll','/reference:Microsoft.CSharp.dll')
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter *.cs | ForEach-Object { $_.FullName })
+$arguments += '/reference:System.Web.Extensions.dll'
 $arguments += '/win32icon:' + (Join-Path $iconDirectory 'NetworkRecovery.App.ico')
 foreach ($iconName in @('App','Enabled','Disabled')) {
     $arguments += '/resource:' + (Join-Path $iconDirectory ('NetworkRecovery.' + $iconName + '.ico')) + ',NetworkRecovery.Icons.' + $iconName + '.ico'

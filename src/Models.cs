@@ -12,6 +12,7 @@ namespace NetworkRecovery
         public string WifiProfileName = "";
         public string WifiSsidHex = "";
         public bool ReconnectWifi;
+        public bool CountryProcessGuard;
         public int OfflineSeconds = 180;
         public int RepairSeconds = 60;
         public int StartupGraceSeconds = 300;

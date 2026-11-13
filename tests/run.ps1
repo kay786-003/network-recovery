@@ -12,6 +12,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 Write-Output 'No network configuration, profiles, tasks or restart actions were changed.'
 
+# Country guard uses fake lookups and stop callbacks; never contacts the service or kills processes.
+$countryExe = Join-Path $folder 'CountryProcessGuardChecks.exe'
+& $compiler /nologo /target:exe /reference:System.Net.Http.dll /reference:System.Web.Extensions.dll ('/out:' + $countryExe) (Join-Path $project 'src\Models.cs') (Join-Path $project 'src\CountryProcessGuard.cs') (Join-Path $PSScriptRoot 'CountryProcessGuardChecks.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Country guard test compilation failed.' }
+& $countryExe
+if ($LASTEXITCODE -ne 0) { throw 'Country guard tests failed.' }
+
 # Read-only Windows COM regression: a missing task may throw FileNotFoundException.
 $exeName = (Get-Content -LiteralPath (Join-Path $project 'dist\current-build.txt') -Raw).Trim()
 if ($exeName -notmatch '^NetworkRecovery-v\d+\.\d+\.\d+(-dev-\d{8}-\d{6})?\.exe$') { throw 'Invalid build filename.' }

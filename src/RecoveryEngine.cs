@@ -42,6 +42,9 @@ namespace NetworkRecovery
                 config.OfflineSeconds < 5 || config.RepairSeconds < 5 || config.StartupGraceSeconds < 0)
                 throw new InvalidDataException("Missing or invalid monitor configuration.");
             string bootId = BootClock.Id;
+            if (config.CountryProcessGuard) ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            var countryGuard = new CountryProcessGuard(CountryProcessGuard.LookupAsync,
+                delegate(string name) { CountryProcessGuard.StopNamedProcesses(name, WriteLog); }, WriteLog);
             double graceEnd = StartupPolicy.GraceDeadline(BootClock.Seconds, config.StartupGraceSeconds);
             double? failureSince = null, repairedAt = null;
             bool everOnline = false, targetAbsent = false;
@@ -73,6 +76,7 @@ namespace NetworkRecovery
                             failureSince = null; repairedAt = null; graceEnd = 0;
                         }
                         bool paused = MonitorControl.IsPaused(pause);
+                        countryGuard.Tick(config.CountryProcessGuard, paused, BootClock.Seconds);
                         if (!paused && budget.ResumeRevision != pause.Revision)
                         {
                             budget.ObserveInternet(true); // Explicit D0012 resume resets the window.
@@ -173,6 +177,7 @@ namespace NetworkRecovery
                 catch (Exception ex)
                 {
                     // Invalid control state cannot accidentally resume destructive actions.
+                    countryGuard.Tick(false, true, BootClock.Seconds);
                     WriteLog("Automatic actions deferred: " + ex.GetType().Name);
                     MonitorControl.Publish("等待操作完成或檢查控制狀態", online);
                 }

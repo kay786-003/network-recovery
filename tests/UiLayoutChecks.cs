@@ -72,6 +72,16 @@ class UiLayoutChecks
         using (MainForm form = new MainForm(true))
         {
             form.Show(); Application.DoEvents(); CheckFooter(form);
+            Check(!((CheckBox)Field(form, "countryGuard")).Checked, "Country guard defaults off in demo mode.");
+            ((CheckBox)Field(form, "countryGuard")).Checked = true;
+            if (Theme.Scale == 1.0F)
+            {
+                form.ClientSize = new Size(1000, 980); Application.DoEvents();
+                string previewPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "country-guard-preview.png");
+                using (Bitmap bitmap = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+                { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(previewPath); }
+                Console.WriteLine("Demo country guard preview: " + previewPath);
+            }
             Field(form, "status").Text = "●  尚未安裝";
             Field(form, "notice").Text = new string('測', 160);
             ((CheckBox)Field(form, "replacePassword")).Checked = true;

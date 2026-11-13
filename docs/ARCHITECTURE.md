@@ -42,6 +42,8 @@ D0011 使用同一個 `RestartRequest` 閘門：預約額度、持久化額度�
 
 `build-icons.ps1` 從 PNG 原圖產生 16／20／24／32／40／48／64／128／256 像素的 32-bit DIB ICO，輸出只放 `dist/icon-resources/`；`build.ps1` 與 Visual Studio 專案均呼叫轉檔，EXE 檔案圖標及三個 managed 圖標資源一併嵌入。`AppIcons.cs` 載入並快取資源，主視窗／監控工具使用藍色，系統匣依監控狀態使用綠色或灰色，未知狀態使用藍色；外網中斷但監控仍啟用時仍顯示綠色。執行時不讀取外部 PNG／ICO，不增加執行期套件。
 
+`CountryProcessGuard.cs` 實作 D0021 的可選地區程序保護。勾選並儲存後才啟用，舊設定預設關閉；SYSTEM 透過 HTTPS 查詢 ipwho.is，10 秒逾時，查詢完成後以單調時間等待 120 秒。非同步查詢不阻塞修復迴圈，也不參與外網恢復判定；操作鎖內只消費已完成結果。只有成功且有效的 CN／MO／HK 才終止固定名稱 claude／cowork-svc 的所有程序，逐一處理例外。暫停或控制狀態錯誤會丟棄在途結果；查詢失敗不使用舊國家代碼。SYSTEM 的出口可能不同於互動應用／分流 VPN，不能當作 Claude 實際流量出口的保證；此功能不是程序啟動攔截器。JSON 使用 Framework 內建 System.Web.Extensions，不新增部署相依。服務格式參考 [ipwho.is 官方文件](https://ipwhois.io/documentation)。
+
 ## Windows 官方參考
 
 - [CreateFile 存取權限及共用模式](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)

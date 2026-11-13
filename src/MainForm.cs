@@ -35,6 +35,7 @@ namespace NetworkRecovery
         readonly CheckBox autoConnect = new PlainCheckBox();
         readonly CheckBox showPassword = new PlainCheckBox();
         readonly CheckBox replacePassword = new PlainCheckBox();
+        readonly CheckBox countryGuard = new PlainCheckBox();
         readonly TextBox password = new TextBox();
         readonly Label passwordLabel = new Label();
         readonly Label wifiInfo = new WrapLabel();
@@ -94,6 +95,7 @@ namespace NetworkRecovery
                 if (preview) { PopulatePreview(); return; }
                 try { saved = AppInstaller.LoadConfig(); }
                 catch (Exception ex) { ShowNotice(ex.Message, true); }
+                countryGuard.Checked = saved != null && saved.CountryProcessGuard;
                 LoadAdapters(); RefreshStatus(); statusTimer.Start();
             };
             FormClosed += delegate { statusTimer.Stop(); statusTimer.Dispose(); password.Clear(); };
@@ -127,7 +129,7 @@ namespace NetworkRecovery
             if (!layoutReady) return;
             int available = ClientSize.Width + (VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
             bool wide = available >= S(900);
-            Size minimum = wide ? new Size(S(860), S(700)) : new Size(S(420), S(1080));
+            Size minimum = wide ? new Size(S(860), S(900)) : new Size(S(420), S(1300));
             SuspendLayout();
             content.SuspendLayout();
             if (wide != wideLayout) ApplyBodyMode(wide);
@@ -174,7 +176,7 @@ namespace NetworkRecovery
             if (linkPanel == null || footerPanel == null || flowCard == null) return;
             if (linkPanel.Parent != null) linkPanel.Parent.Controls.Remove(linkPanel);
             if (wide) { linkPanel.Margin = Padding.Empty; footerPanel.Controls.Add(linkPanel, 0, 1); }
-            else { linkPanel.Margin = new Padding(0, S(8), 0, 0); flowCard.Controls.Add(linkPanel, 0, 3); }
+            else { linkPanel.Margin = new Padding(0, S(8), 0, 0); flowCard.Controls.Add(linkPanel, 0, 5); }
         }
 
         void FitAdapterColumns()
@@ -263,6 +265,13 @@ namespace NetworkRecovery
             flow.Controls.Add(Para("斷網 3 分鐘 → 修復網卡 → 再等 60 秒 → 重啟電腦", 10.5F, blue, true), 0, 1);
             Label flowNote = Para("開機後給網路 5 分鐘恢復；持續無網將再次觸發修復。", 9F, muted, false); flowNote.Margin = new Padding(0, S(3), 0, 0);
             flow.Controls.Add(flowNote, 0, 2);
+            flow.RowCount = 5;
+            flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            countryGuard.Text = "啟用地區程序保護";
+            countryGuard.Margin = new Padding(0, S(8), 0, S(3));
+            flow.Controls.Add(countryGuard, 0, 3);
+            flow.Controls.Add(Para("每 120 秒查詢外網 IP 地區；CN／MO／HK 時強制關閉 claude、cowork-svc，未儲存內容可能遺失。", 9F, muted, false), 0, 4);
             root.Controls.Add(flow, 0, 3);
 
             // Footer: notice on top, buttons below. Rows can only grow downward, so nothing can cover a button.
@@ -291,7 +300,7 @@ namespace NetworkRecovery
             };
             FlowLayoutPanel links = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
             links.Controls.Add(settings); links.Controls.Add(tools);
-            flow.RowCount = 4; flow.RowStyles.Add(new RowStyle(SizeType.AutoSize)); linkPanel = links; flowCard = flow; footerPanel = footer;
+            flow.RowCount = 6; flow.RowStyles.Add(new RowStyle(SizeType.AutoSize)); linkPanel = links; flowCard = flow; footerPanel = footer;
             StyleButton(stop, "停止監控", false); stop.Anchor = AnchorStyles.Right; stop.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(stop, 1, 1);
             StyleButton(start, "儲存並啟用", true); start.Anchor = AnchorStyles.Right; start.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(start, 2, 1);
             root.Controls.Add(footer, 0, 4);
@@ -315,7 +324,7 @@ namespace NetworkRecovery
                     TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
             password.BackColor = field; password.ForeColor = ink; password.BorderStyle = BorderStyle.FixedSingle;
-            foreach (CheckBox box in new[] { reconnect, autoConnect, showPassword, replacePassword }) { box.FlatStyle = FlatStyle.Flat; box.ForeColor = ink; box.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112); }
+            foreach (CheckBox box in new[] { reconnect, autoConnect, showPassword, replacePassword, countryGuard }) { box.FlatStyle = FlatStyle.Flat; box.ForeColor = ink; box.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112); }
             adapters.BackColor = field; adapters.ForeColor = ink; adapters.BorderStyle = BorderStyle.FixedSingle;
             adapters.OwnerDraw = true;
             adapters.DrawColumnHeader += delegate(object s, DrawListViewColumnHeaderEventArgs e) {
@@ -499,6 +508,7 @@ namespace NetworkRecovery
             passwordLabel.Visible = password.Visible = showPassword.Visible = needsPassword;
             password.Enabled = showPassword.Enabled = needsPassword && !busy;
             autoConnect.Visible = wireless && reconnect.Checked;
+            countryGuard.Enabled = !busy;
             start.Enabled = !busy && adapter != null;
         }
 
@@ -516,7 +526,7 @@ namespace NetworkRecovery
             ShowNotice("正在儲存設定並啟用背景監控…", false);
             try
             {
-                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi, WifiSsidHex = useWifi ? wifi.SsidHex : "" };
+                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi, WifiSsidHex = useWifi ? wifi.SsidHex : "", CountryProcessGuard = countryGuard.Checked };
                 await Task.Run(delegate {
                     using (ActionLease action = new ActionLease(1000))
                     {
