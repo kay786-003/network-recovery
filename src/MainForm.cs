@@ -12,11 +12,9 @@ namespace NetworkRecovery
 {
     public sealed class MainForm : Form
     {
-        const string FontName = Theme.FontName;
         readonly Color ink = Theme.Ink;
         readonly Color muted = Theme.Muted;
-        readonly Color blue = Theme.Accent;
-        readonly Color line = Theme.Line;
+        readonly Color accent = Theme.Accent;
         readonly bool preview;
         readonly float scale;
         readonly Panel content = new Panel();
@@ -27,25 +25,28 @@ namespace NetworkRecovery
         FlowLayoutPanel linkPanel;
         Card adapterCard;
         Card wifiCard;
+        Control statusDot;
+        Color statusTone;
         bool wideLayout;
         bool layoutReady;
         readonly ListView adapters = new ListView();
-        readonly ComboBox networks = new ComboBox();
+        readonly ComboBox networks = new ThemedComboBox();
         readonly CheckBox reconnect = new PlainCheckBox();
         readonly CheckBox autoConnect = new PlainCheckBox();
         readonly CheckBox showPassword = new PlainCheckBox();
         readonly CheckBox replacePassword = new PlainCheckBox();
         readonly CheckBox countryGuard = new PlainCheckBox();
         readonly TextBox password = new TextBox();
+        InputFrame passwordFrame;
         readonly Label passwordLabel = new Label();
         readonly Label wifiInfo = new WrapLabel();
         readonly Label adapterInfo = new WrapLabel();
         readonly Label status = new WrapLabel();
         readonly Label notice = new WrapLabel();
-        readonly Button start = new Button();
-        readonly Button stop = new Button();
-        readonly Button refreshAdapters = new Button();
-        readonly Button refreshWifi = new Button();
+        readonly Button start = new ThemedButton { Glyph = '' };
+        readonly Button stop = new ThemedButton { Glyph = '' };
+        readonly Button refreshAdapters = new ThemedButton { Glyph = '' };
+        readonly Button refreshWifi = new ThemedButton { Glyph = '' };
         readonly System.Windows.Forms.Timer statusTimer = new System.Windows.Forms.Timer();
         AppConfig saved;
         bool busy;
@@ -63,11 +64,10 @@ namespace NetworkRecovery
             Text = "Network Recovery · 連線守護";
             Icon = AppIcons.Application;
             Font = Theme.Font(9F, FontStyle.Regular);
-            BackColor = Color.FromArgb(9, 14, 26);
-            ForeColor = ink;
+            Theme.ApplyWindow(this);
             // Every pixel value goes through S(); fonts are point-based, so text and layout scale together.
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(S(1000), S(680));
+            ClientSize = new Size(S(1000), S(720));
             MinimumSize = new Size(S(360), S(300));
             StartPosition = FormStartPosition.CenterScreen;
             AutoScroll = true;
@@ -129,13 +129,13 @@ namespace NetworkRecovery
             if (!layoutReady) return;
             int available = ClientSize.Width + (VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
             bool wide = available >= S(900);
-            Size minimum = wide ? new Size(S(860), S(900)) : new Size(S(420), S(1300));
+            Size minimum = wide ? new Size(S(860), S(960)) : new Size(S(420), S(1400));
             SuspendLayout();
             content.SuspendLayout();
             if (wide != wideLayout) ApplyBodyMode(wide);
             content.Size = new Size(Math.Max(minimum.Width, ClientSize.Width), Math.Max(minimum.Height, ClientSize.Height));
             // Very wide screens keep a readable column instead of stretching the cards edge to edge.
-            int rootWidth = Math.Min(content.Width, S(1240));
+            int rootWidth = Math.Min(content.Width, S(1180));
             root.SetBounds((content.Width - rootWidth) / 2, 0, rootWidth, content.Height);
             content.ResumeLayout(true);
             ResumeLayout(true);
@@ -151,10 +151,10 @@ namespace NetworkRecovery
             if (wide)
             {
                 body.ColumnCount = 2; body.RowCount = 1;
-                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
-                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60F));
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
+                body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56F));
                 body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-                adapterCard.Margin = new Padding(0, 0, S(7), 0); wifiCard.Margin = new Padding(S(7), 0, 0, 0);
+                adapterCard.Margin = new Padding(0, 0, S(6), 0); wifiCard.Margin = new Padding(S(6), 0, 0, 0);
                 body.Controls.Add(adapterCard, 0, 0); body.Controls.Add(wifiCard, 1, 0);
             }
             else
@@ -163,7 +163,7 @@ namespace NetworkRecovery
                 body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                 body.RowStyles.Add(new RowStyle(SizeType.Percent, 42F));
                 body.RowStyles.Add(new RowStyle(SizeType.Percent, 58F));
-                adapterCard.Margin = new Padding(0, 0, 0, S(7)); wifiCard.Margin = new Padding(0, S(7), 0, 0);
+                adapterCard.Margin = new Padding(0, 0, 0, S(6)); wifiCard.Margin = new Padding(0, S(6), 0, 0);
                 body.Controls.Add(adapterCard, 0, 0); body.Controls.Add(wifiCard, 0, 1);
             }
             body.ResumeLayout(true);
@@ -176,7 +176,7 @@ namespace NetworkRecovery
             if (linkPanel == null || footerPanel == null || flowCard == null) return;
             if (linkPanel.Parent != null) linkPanel.Parent.Controls.Remove(linkPanel);
             if (wide) { linkPanel.Margin = Padding.Empty; footerPanel.Controls.Add(linkPanel, 0, 1); }
-            else { linkPanel.Margin = new Padding(0, S(8), 0, 0); flowCard.Controls.Add(linkPanel, 0, 5); }
+            else { linkPanel.Margin = new Padding(0, S(10), 0, 0); flowCard.Controls.Add(linkPanel, 0, 6); }
         }
 
         void FitAdapterColumns()
@@ -184,7 +184,7 @@ namespace NetworkRecovery
             if (adapters.Columns.Count < 3) return;
             int total = adapters.ClientSize.Width;
             if (total <= 0) return;
-            int first = (int)(total * 0.46), second = (int)(total * 0.24);
+            int first = (int)(total * 0.5), second = (int)(total * 0.22);
             adapters.Columns[0].Width = first; adapters.Columns[1].Width = second;
             adapters.Columns[2].Width = Math.Max(S(40), total - first - second);
         }
@@ -205,11 +205,23 @@ namespace NetworkRecovery
 
         void StyleButton(Button button, string text, bool primary) { Theme.StyleButton(button, text, primary ? 1 : 0); }
 
+        // Card heading: numbered accent badge followed by the title.
+        TableLayoutPanel Heading(string number, string title)
+        {
+            TableLayoutPanel heading = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
+            heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Pill badge = new Pill { Text = number, Circle = true, Fill = Theme.Accent, ForeColor = Theme.OnAccent, AutoSize = false,
+                Size = new Size(S(24), S(24)), Font = Theme.Font(9F, true), Margin = new Padding(0, 0, S(10), 0), Anchor = AnchorStyles.Left };
+            heading.Controls.Add(badge, 0, 0);
+            heading.Controls.Add(Text1(title, 12F, ink, true), 1, 0);
+            return heading;
+        }
+
         void BuildLayout()
         {
             root = new TableLayoutPanel {
                 ColumnCount = 1, RowCount = 5, Margin = Padding.Empty,
-                Padding = new Padding(S(24), S(18), S(24), S(18))
+                Padding = new Padding(S(28), S(22), S(28), S(20))
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -219,34 +231,41 @@ namespace NetworkRecovery
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             content.Controls.Add(root);
 
-            // Header: brand mark, product name and administrator badge.
-            TableLayoutPanel header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, S(14)) };
+            // Header: app mark, product name and administrator badge.
+            TableLayoutPanel header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, S(18)) };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            Panel brand = new Panel { BackColor = blue, Size = new Size(S(42), S(42)), Margin = new Padding(0, 0, S(12), 0), Anchor = AnchorStyles.Left };
-            brand.Paint += delegate(object sender, PaintEventArgs e) {
-                e.Graphics.ScaleTransform(brand.ClientSize.Width / 38F, brand.ClientSize.Height / 38F);
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (Pen p = new Pen(Color.FromArgb(4, 18, 32), 2F)) {
-                    e.Graphics.DrawArc(p, 7, 7, 23, 23, 214, 112);
-                    e.Graphics.DrawArc(p, 12, 14, 13, 13, 210, 120);
-                }
-                e.Graphics.FillEllipse(Brushes.Black, 17, 25, 4, 4);
-            };
+            Panel brand = new Panel { Size = new Size(S(48), S(48)), Margin = new Padding(0, 0, S(14), 0), Anchor = AnchorStyles.Left };
+            brand.Paint += delegate(object sender, PaintEventArgs e) { IconArt.Draw(e.Graphics, IconArt.App, new RectangleF(0, 0, brand.Width, brand.Height)); };
             TableLayoutPanel titles = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
-            titles.Controls.Add(Text1("NETWORK RECOVERY", 13F, ink, true), 0, 0);
-            titles.Controls.Add(Text1("連線守護 · 斷網時讓連線自行恢復", 9F, muted, false), 0, 1);
-            Label tag = Text1("管理員模式", 9F, blue, true);
-            tag.BackColor = Color.FromArgb(10, 52, 68); tag.Padding = new Padding(S(12), S(5), S(12), S(5)); tag.Anchor = AnchorStyles.Right;
+            titles.Controls.Add(Text1("Network Recovery", 16F, ink, true), 0, 0);
+            Label subtitle = Text1("連線守護 · 斷網時讓連線自行恢復", 9.5F, muted, false); subtitle.Margin = new Padding(0, S(2), 0, 0);
+            titles.Controls.Add(subtitle, 0, 1);
+            Pill tag = new Pill { Text = "管理員模式", Fill = Theme.SurfaceAlt, Border = Theme.Line, ForeColor = muted, Font = Theme.Font(8.5F, false),
+                Padding = new Padding(S(12), S(5), S(12), S(5)), Anchor = AnchorStyles.Right, Margin = Padding.Empty };
             header.Controls.Add(brand, 0, 0); header.Controls.Add(titles, 1, 0); header.Controls.Add(tag, 2, 0);
             root.Controls.Add(header, 0, 0);
 
             // Status banner: always visible at the top so the monitoring state is the first thing read.
-            Card banner = new Card(new Padding(S(20), S(12), S(20), S(12)), blue) { AutoSize = true, Margin = new Padding(0, 0, 0, S(14)) };
-            banner.RowCount = 1; banner.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            status.Font = Theme.Font(10F, FontStyle.Bold); status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
-            banner.Controls.Add(status, 0, 0);
+            // The indicator is painted in the card's left padding, so the text column keeps the full width to wrap in.
+            Card banner = new Card(new Padding(S(70), S(14), S(20), S(14)), Color.Empty) { AutoSize = true, Margin = new Padding(0, 0, 0, S(12)) };
+            banner.RowCount = 2;
+            banner.RowStyles.Add(new RowStyle(SizeType.AutoSize)); banner.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            statusTone = Theme.Neutral;
+            statusDot = banner;
+            banner.Paint += delegate(object sender, PaintEventArgs e) {
+                Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                float d = S(36), x = S(20), y = (banner.Height - d) / 2F;
+                using (SolidBrush halo = new SolidBrush(Theme.Mix(Theme.Surface, statusTone, 0.18F))) g.FillEllipse(halo, x, y, d, d);
+                float c = d * 0.36F;
+                using (SolidBrush core = new SolidBrush(statusTone)) g.FillEllipse(core, x + (d - c) / 2, y + (d - c) / 2, c, c);
+            };
+            Label caption = Text1("監控狀態", 8.5F, muted, false); caption.Margin = new Padding(0, 0, 0, S(2));
+            banner.Controls.Add(caption, 0, 0);
+            status.Font = Theme.Font(11F, FontStyle.Bold); status.ForeColor = ink; status.Dock = DockStyle.Fill; status.Margin = Padding.Empty;
+            banner.Controls.Add(status, 0, 1);
+            banner.AddSpacerRow();
             root.Controls.Add(banner, 0, 1);
 
             // Body: adapter card and Wi-Fi card.
@@ -256,22 +275,26 @@ namespace NetworkRecovery
             ApplyBodyMode(true);
             root.Controls.Add(body, 0, 2);
 
-            // Protection flow summary.
-            Card flow = new Card(new Padding(S(20), S(12), S(20), S(12)), Color.Empty) { AutoSize = true, Margin = new Padding(0, S(14), 0, S(14)) };
-            flow.RowCount = 3;
-            for (int i = 0; i < 3; i++) flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Label flowTitle = Para("目前的保護流程", 9F, muted, true); flowTitle.Margin = new Padding(0, 0, 0, S(3));
+            // Protection flow summary and the optional country guard.
+            Card flow = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty) { AutoSize = true, Margin = new Padding(0, S(12), 0, S(14)) };
+            flow.RowCount = 7;
+            for (int i = 0; i < 7; i++) flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Label flowTitle = Para("自動保護流程", 9F, muted, true); flowTitle.Margin = new Padding(0, 0, 0, S(10));
             flow.Controls.Add(flowTitle, 0, 0);
-            flow.Controls.Add(Para("斷網 3 分鐘 → 修復網卡 → 再等 60 秒 → 重啟電腦", 10.5F, blue, true), 0, 1);
-            Label flowNote = Para("開機後給網路 5 分鐘恢復；持續無網將再次觸發修復。", 9F, muted, false); flowNote.Margin = new Padding(0, S(3), 0, 0);
+            StepFlow steps = new StepFlow { Steps = new[] { "斷網 3 分鐘", "修復網卡", "再等 60 秒", "重新啟動電腦" }, Dock = DockStyle.Fill,
+                Margin = Padding.Empty, Font = Theme.Font(9F, true) };
+            flow.Controls.Add(steps, 0, 1);
+            Label flowNote = Para("開機後先給網路 5 分鐘恢復；持續無網將再次觸發修復。", 9F, muted, false); flowNote.Margin = new Padding(0, S(10), 0, 0);
             flow.Controls.Add(flowNote, 0, 2);
-            flow.RowCount = 5;
-            flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Panel divider = new Panel { Height = 1, Dock = DockStyle.Fill, BackColor = Theme.Line, Margin = new Padding(0, S(14), 0, S(12)) };
+            flow.Controls.Add(divider, 0, 3);
             countryGuard.Text = "啟用地區程序保護";
-            countryGuard.Margin = new Padding(0, S(8), 0, S(3));
-            flow.Controls.Add(countryGuard, 0, 3);
-            flow.Controls.Add(Para("每 120 秒查詢外網 IP 地區；CN／MO／HK 時強制關閉 claude、cowork-svc，未儲存內容可能遺失。", 9F, muted, false), 0, 4);
+            countryGuard.Margin = new Padding(0, 0, 0, S(2));
+            flow.Controls.Add(countryGuard, 0, 4);
+            Label guardNote = Para("每 120 秒查詢外網 IP 地區；CN／MO／HK 時強制關閉 claude、cowork-svc，未儲存內容可能遺失。", 9F, muted, false);
+            guardNote.Margin = new Padding(S(28), 0, 0, 0);
+            flow.Controls.Add(guardNote, 0, 5);
+            flow.AddSpacerRow();
             root.Controls.Add(flow, 0, 3);
 
             // Footer: notice on top, buttons below. Rows can only grow downward, so nothing can cover a button.
@@ -281,73 +304,97 @@ namespace NetworkRecovery
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             footer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             footer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            notice.ForeColor = muted; notice.Dock = DockStyle.Fill; notice.Margin = new Padding(0, 0, 0, S(10));
+            notice.ForeColor = muted; notice.Dock = DockStyle.Fill; notice.Margin = new Padding(0, 0, 0, S(12));
             notice.Text = "啟用後會在背景持續運作。自動重啟會關閉程式，請定期儲存工作。";
             footer.Controls.Add(notice, 0, 0); footer.SetColumnSpan(notice, 3);
-            Button settings = new Button { Text = "Windows Wi-Fi 設定", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
-                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
-                Padding = new Padding(S(2), S(6), S(10), S(6)), Font = Theme.Font(9F, FontStyle.Underline) };
-            settings.FlatAppearance.BorderSize = 0; settings.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
+            ThemedButton settings = new ThemedButton { Glyph = '', Anchor = AnchorStyles.Left };
+            Theme.StyleButton(settings, "Windows Wi-Fi 設定", 3);
             settings.Click += delegate { if (!preview) Process.Start(new ProcessStartInfo("explorer.exe", "ms-settings:network-wifi") { UseShellExecute = true }); };
-            Button tools = new Button { Text = "監控工具", FlatStyle = FlatStyle.Flat, ForeColor = blue, Cursor = Cursors.Hand,
-                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left, Margin = Padding.Empty,
-                Padding = new Padding(S(10), S(6), S(10), S(6)), Font = Theme.Font(9F, FontStyle.Underline) };
-            tools.FlatAppearance.BorderSize = 0; tools.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 38, 62);
+            ThemedButton tools = new ThemedButton { Glyph = '', Anchor = AnchorStyles.Left };
+            Theme.StyleButton(tools, "監控工具", 3);
+            tools.Margin = new Padding(S(4), 0, 0, 0);
             tools.Click += delegate {
                 if (busy) return;
                 if (toolsWindow == null || toolsWindow.IsDisposed) { toolsWindow = new MonitorToolsForm(preview); toolsWindow.Show(this); }
                 else toolsWindow.Activate();
             };
             FlowLayoutPanel links = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, Anchor = AnchorStyles.Left };
+
             links.Controls.Add(settings); links.Controls.Add(tools);
-            flow.RowCount = 6; flow.RowStyles.Add(new RowStyle(SizeType.AutoSize)); linkPanel = links; flowCard = flow; footerPanel = footer;
+            linkPanel = links; flowCard = flow; footerPanel = footer;
             StyleButton(stop, "停止監控", false); stop.Anchor = AnchorStyles.Right; stop.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(stop, 1, 1);
-            StyleButton(start, "儲存並啟用", true); start.Anchor = AnchorStyles.Right; start.Margin = new Padding(S(12), 0, 0, 0); footer.Controls.Add(start, 2, 1);
+            StyleButton(start, "儲存並啟用", true); start.Anchor = AnchorStyles.Right; start.Margin = new Padding(S(10), 0, 0, 0); footer.Controls.Add(start, 2, 1);
             root.Controls.Add(footer, 0, 4);
             PlaceLinks(wideLayout);
-            StyleDark();
+            StyleInputs();
             UpdateWifiControls();
         }
 
-        // Dark "console" styling for inputs and the adapter list (owner-drawn so the header is dark too).
-        void StyleDark()
+        // Inputs and the adapter list are owner-drawn so both palettes stay consistent.
+        void StyleInputs()
         {
-            Color field = Color.FromArgb(9, 14, 26), card = Color.FromArgb(16, 24, 41), sel = Color.FromArgb(12, 62, 80);
+            Color field = Theme.Field, card = Theme.Surface, sel = Theme.Selection;
             networks.FlatStyle = FlatStyle.Flat; networks.BackColor = field; networks.ForeColor = ink;
-            networks.DrawMode = DrawMode.OwnerDrawFixed; networks.ItemHeight = S(22);
+            networks.DrawMode = DrawMode.OwnerDrawFixed; networks.ItemHeight = S(26);
+            Theme.ApplyScrollTheme(networks, "DarkMode_CFD");
             networks.DrawItem += delegate(object s, DrawItemEventArgs e) {
-                if (e.Index < 0) return;
-                bool hot = (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
+                if (e.Index < 0) { using (SolidBrush b = new SolidBrush(field)) e.Graphics.FillRectangle(b, e.Bounds); return; }
+                bool edit = (e.State & DrawItemState.ComboBoxEdit) != 0;
+                bool hot = (e.State & DrawItemState.Selected) != 0 && !edit;
                 using (SolidBrush b = new SolidBrush(hot ? sel : field)) e.Graphics.FillRectangle(b, e.Bounds);
                 TextRenderer.DrawText(e.Graphics, networks.GetItemText(networks.Items[e.Index]), networks.Font,
-                    new Rectangle(e.Bounds.X + S(4), e.Bounds.Y, e.Bounds.Width - S(4), e.Bounds.Height), networks.Enabled ? ink : muted,
+                    new Rectangle(e.Bounds.X + S(edit ? 6 : 10), e.Bounds.Y, e.Bounds.Width - S(12), e.Bounds.Height), networks.Enabled ? ink : muted,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
-            password.BackColor = field; password.ForeColor = ink; password.BorderStyle = BorderStyle.FixedSingle;
-            foreach (CheckBox box in new[] { reconnect, autoConnect, showPassword, replacePassword, countryGuard }) { box.FlatStyle = FlatStyle.Flat; box.ForeColor = ink; box.FlatAppearance.BorderColor = Color.FromArgb(52, 74, 112); }
-            adapters.BackColor = field; adapters.ForeColor = ink; adapters.BorderStyle = BorderStyle.FixedSingle;
+            foreach (CheckBox box in new[] { reconnect, autoConnect, showPassword, replacePassword, countryGuard }) box.ForeColor = ink;
+            adapters.BackColor = card; adapters.ForeColor = ink; adapters.BorderStyle = BorderStyle.None;
             adapters.OwnerDraw = true;
+            // A tall, empty image list is the standard way to give ListView rows breathing room.
+            adapters.SmallImageList = new ImageList { ImageSize = new Size(1, S(34)) };
+            Theme.ApplyScrollTheme(adapters, "DarkMode_Explorer");
             adapters.DrawColumnHeader += delegate(object s, DrawListViewColumnHeaderEventArgs e) {
                 using (SolidBrush b = new SolidBrush(card)) e.Graphics.FillRectangle(b, e.Bounds);
-                using (Pen p = new Pen(line)) e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-                TextRenderer.DrawText(e.Graphics, e.Header.Text, adapters.Font, new Rectangle(e.Bounds.X + S(6), e.Bounds.Y, e.Bounds.Width - S(6), e.Bounds.Height), muted,
+                using (Pen p = new Pen(Theme.Line)) e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, adapters.Font, new Rectangle(e.Bounds.X + S(12), e.Bounds.Y, e.Bounds.Width - S(12), e.Bounds.Height), muted,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
             adapters.DrawItem += delegate(object s, DrawListViewItemEventArgs e) { };
             adapters.DrawSubItem += delegate(object s, DrawListViewSubItemEventArgs e) {
-                Rectangle row = new Rectangle(e.Bounds.X, e.Bounds.Y, e.Bounds.Width, e.Bounds.Height);
-                using (SolidBrush b = new SolidBrush(e.Item.Selected ? sel : field)) e.Graphics.FillRectangle(b, row);
-                if (e.Item.Selected && e.ColumnIndex == 0) using (SolidBrush a = new SolidBrush(blue)) e.Graphics.FillRectangle(a, row.X, row.Y, 3, row.Height);
+                Graphics g = e.Graphics;
+                Rectangle row = e.Bounds;
+                using (SolidBrush b = new SolidBrush(card)) g.FillRectangle(b, row);
+                if (e.Item.Selected)
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    // One rounded highlight across the whole row: each column paints its slice of it.
+                    Rectangle full = e.Item.Bounds;
+                    RectangleF pill = new RectangleF(full.X + 0.5F, full.Y + S(2) + 0.5F, adapters.ClientSize.Width - 1F, full.Height - S(4) - 1F);
+                    g.SetClip(row);
+                    Theme.FillRound(g, sel, pill, S(5));
+                    if (e.ColumnIndex == 0) Theme.FillRound(g, accent, new RectangleF(full.X + S(2), full.Y + S(10), S(3), full.Height - S(20)), S(2));
+                    g.ResetClip();
+                }
+                int left = row.X + S(12);
                 Color text = e.ColumnIndex == 0 ? ink : muted;
-                if (e.ColumnIndex == 2) text = e.SubItem.Text == "已連線" ? Color.FromArgb(74, 222, 128) : muted;
-                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, adapters.Font, new Rectangle(row.X + S(6), row.Y, row.Width - S(6), row.Height), text,
+                if (e.ColumnIndex == 2)
+                {
+                    bool connected = e.SubItem.Text == "已連線";
+                    Color dot = connected ? Theme.Success : Theme.Neutral;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    int d = S(8);
+                    using (SolidBrush b = new SolidBrush(dot)) g.FillEllipse(b, left, row.Y + (row.Height - d) / 2, d, d);
+                    left += d + S(8);
+                    text = connected ? Theme.Success : muted;
+                }
+
+                TextRenderer.DrawText(g, e.SubItem.Text, adapters.Font, new Rectangle(left, row.Y, row.Right - left - S(4), row.Height), text,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             };
         }
 
         Card BuildAdapterCard()
         {
-            Card card = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty);
+            Card card = new Card(new Padding(S(20), S(18), S(20), S(18)), Color.Empty);
             card.ColumnCount = 2; card.RowCount = 4;
             card.ColumnStyles.Clear();
             card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -356,17 +403,17 @@ namespace NetworkRecovery
             card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             card.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            card.Controls.Add(Text1("01  選擇網卡", 13F, ink, true), 0, 0);
+            card.Controls.Add(Heading("1", "選擇網卡"), 0, 0);
             StyleButton(refreshAdapters, "重新整理", false); refreshAdapters.Anchor = AnchorStyles.Right; card.Controls.Add(refreshAdapters, 1, 0);
-            Label hint = Para("所有網卡都會列出，包含 VPN 與虛擬網卡。", 9F, muted, false); hint.Margin = new Padding(0, S(6), 0, S(10));
+            Label hint = Para("所有網卡都會列出，包含 VPN 與虛擬網卡。", 9F, muted, false); hint.Margin = new Padding(0, S(8), 0, S(12));
             card.Controls.Add(hint, 0, 1); card.SetColumnSpan(hint, 2);
-            adapters.Dock = DockStyle.Fill; adapters.Margin = Padding.Empty; adapters.MinimumSize = new Size(0, S(90));
+            adapters.Dock = DockStyle.Fill; adapters.Margin = Padding.Empty; adapters.MinimumSize = new Size(0, S(110));
             adapters.View = View.Details; adapters.FullRowSelect = true; adapters.HideSelection = false; adapters.MultiSelect = false;
-            adapters.BorderStyle = BorderStyle.FixedSingle; adapters.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            adapters.HeaderStyle = ColumnHeaderStyle.Nonclickable;
             adapters.ShowItemToolTips = true;
             adapters.Columns.Add("網卡", S(160)); adapters.Columns.Add("類型", S(90)); adapters.Columns.Add("狀態", S(90));
             card.Controls.Add(adapters, 0, 2); card.SetColumnSpan(adapters, 2);
-            adapterInfo.Dock = DockStyle.Fill; adapterInfo.ForeColor = muted; adapterInfo.Margin = new Padding(0, S(10), 0, 0);
+            adapterInfo.Dock = DockStyle.Fill; adapterInfo.ForeColor = muted; adapterInfo.Margin = new Padding(0, S(12), 0, 0);
             adapterInfo.Text = "選擇實際用來上網的網卡。";
             card.Controls.Add(adapterInfo, 0, 3); card.SetColumnSpan(adapterInfo, 2);
             return card;
@@ -374,7 +421,7 @@ namespace NetworkRecovery
 
         Card BuildWifiCard()
         {
-            Card card = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty);
+            Card card = new Card(new Padding(S(20), S(18), S(20), S(18)), Color.Empty);
             card.ColumnCount = 2; card.RowCount = 10;
             card.ColumnStyles.Clear();
             card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -382,35 +429,37 @@ namespace NetworkRecovery
             for (int i = 0; i < 9; i++) card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             card.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            Label title = Text1("02  Wi-Fi 重連", 13F, ink, true); title.Margin = new Padding(0, 0, 0, S(10));
+            TableLayoutPanel title = Heading("2", "Wi-Fi 重連"); title.Margin = new Padding(0, 0, 0, S(14));
             card.Controls.Add(title, 0, 0); card.SetColumnSpan(title, 2);
 
-            reconnect.Text = "斷網修復後，重新連接指定 Wi-Fi"; reconnect.Checked = true; reconnect.Anchor = AnchorStyles.Left; reconnect.Margin = new Padding(0, 0, 0, S(10));
+            reconnect.Text = "斷網修復後，重新連接指定 Wi-Fi"; reconnect.Checked = true; reconnect.Anchor = AnchorStyles.Left; reconnect.Margin = new Padding(0, 0, 0, S(14));
             card.Controls.Add(reconnect, 0, 1); card.SetColumnSpan(reconnect, 2);
 
-            Label networkLabel = Text1("Wi-Fi 網路", 9.5F, ink, true); networkLabel.Margin = new Padding(0, 0, 0, S(4));
+            Label networkLabel = Text1("Wi-Fi 網路", 9F, muted, true); networkLabel.Margin = new Padding(0, 0, 0, S(6));
             card.Controls.Add(networkLabel, 0, 2); card.SetColumnSpan(networkLabel, 2);
             networks.DropDownStyle = ComboBoxStyle.DropDownList; networks.Dock = DockStyle.Fill; networks.Margin = new Padding(0, 0, S(10), 0);
             card.Controls.Add(networks, 0, 3);
             StyleButton(refreshWifi, "重新掃描", false); refreshWifi.Anchor = AnchorStyles.Right; card.Controls.Add(refreshWifi, 1, 3);
 
-            wifiInfo.Dock = DockStyle.Fill; wifiInfo.ForeColor = muted; wifiInfo.Margin = new Padding(0, S(10), 0, S(10));
+            wifiInfo.Dock = DockStyle.Fill; wifiInfo.ForeColor = muted; wifiInfo.Margin = new Padding(0, S(10), 0, S(12));
             card.Controls.Add(wifiInfo, 0, 4); card.SetColumnSpan(wifiInfo, 2);
 
-            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.AutoSize = true; passwordLabel.Anchor = AnchorStyles.Left; passwordLabel.Margin = new Padding(0, 0, 0, S(4));
-            passwordLabel.Font = new Font(Font, FontStyle.Bold);
+            passwordLabel.Text = "Wi-Fi 密碼"; passwordLabel.AutoSize = true; passwordLabel.Anchor = AnchorStyles.Left; passwordLabel.Margin = new Padding(0, 0, 0, S(6));
+            passwordLabel.Font = Theme.Font(9F, true); passwordLabel.ForeColor = muted;
             card.Controls.Add(passwordLabel, 0, 5);
-            replacePassword.Text = "更新已儲存的密碼"; replacePassword.Anchor = AnchorStyles.Right; replacePassword.Margin = Padding.Empty;
+            replacePassword.Text = "更新已儲存的密碼"; replacePassword.Anchor = AnchorStyles.Right; replacePassword.Margin = new Padding(0, 0, 0, S(4));
             card.Controls.Add(replacePassword, 1, 5);
-            password.UseSystemPasswordChar = true; password.MaxLength = 64; password.Dock = DockStyle.Fill; password.Margin = new Padding(0, 0, S(10), 0);
-            card.Controls.Add(password, 0, 6);
+            password.UseSystemPasswordChar = true; password.MaxLength = 64;
+            password.Font = Theme.Font(10F, false);
+            passwordFrame = new InputFrame(password) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, S(10), 0) };
+            card.Controls.Add(passwordFrame, 0, 6);
             showPassword.Text = "顯示密碼"; showPassword.Anchor = AnchorStyles.Right; showPassword.Margin = Padding.Empty;
             card.Controls.Add(showPassword, 1, 6);
 
-            autoConnect.Text = "使用 Windows 自動連線"; autoConnect.Checked = true; autoConnect.AutoCheck = false; autoConnect.Anchor = AnchorStyles.Left; autoConnect.Margin = new Padding(0, S(10), 0, 0);
+            autoConnect.Text = "使用 Windows 自動連線"; autoConnect.Checked = true; autoConnect.AutoCheck = false; autoConnect.Anchor = AnchorStyles.Left; autoConnect.Margin = new Padding(0, S(12), 0, 0);
             card.Controls.Add(autoConnect, 0, 7); card.SetColumnSpan(autoConnect, 2);
 
-            Label note = Para("密碼由 Windows 保存，不會寫入本應用的設定或紀錄。", 9F, muted, false); note.Margin = new Padding(0, S(12), 0, 0);
+            Label note = Para("密碼由 Windows 保存，不會寫入本應用的設定或紀錄。", 9F, muted, false); note.Margin = new Padding(0, S(14), 0, 0);
             card.Controls.Add(note, 0, 8); card.SetColumnSpan(note, 2);
             return card;
         }
@@ -505,7 +554,7 @@ namespace NetworkRecovery
             replacePassword.Visible = wireless && reconnect.Checked && wifi != null && wifi.HasSavedProfile && !wifi.IsOpen && wifi.IsSupportedPersonal;
             replacePassword.Enabled = !busy;
             bool needsPassword = wireless && reconnect.Checked && wifi != null && (!wifi.HasSavedProfile || replacePassword.Checked) && !wifi.IsOpen && wifi.IsSupportedPersonal;
-            passwordLabel.Visible = password.Visible = showPassword.Visible = needsPassword;
+            passwordLabel.Visible = passwordFrame.Visible = password.Visible = showPassword.Visible = needsPassword;
             password.Enabled = showPassword.Enabled = needsPassword && !busy;
             autoConnect.Visible = wireless && reconnect.Checked;
             countryGuard.Enabled = !busy;
@@ -560,11 +609,21 @@ namespace NetworkRecovery
         void RefreshStatus()
         {
             if (preview || IsDisposed || busy) return;
-            try { status.Text = "●  " + AppInstaller.GetStatus(); }
-            catch { status.Text = "●  無法讀取監控狀態"; }
+            try { SetStatus(AppInstaller.GetStatus()); }
+            catch { SetStatus("無法讀取監控狀態"); }
         }
 
-        void ShowNotice(string message, bool error) { notice.Text = message; notice.ForeColor = error ? Color.FromArgb(255, 128, 128) : muted; }
+        // Status text plus a colored indicator: green while monitoring, gray when off, amber otherwise.
+        void SetStatus(string text)
+        {
+            status.Text = text;
+            Icon icon = AppIcons.ForStatus(text);
+            statusTone = text.StartsWith("無法", StringComparison.Ordinal) ? Theme.Danger :
+                icon == AppIcons.Enabled ? Theme.Success : icon == AppIcons.Disabled || text.StartsWith("尚未", StringComparison.Ordinal) ? Theme.Neutral : Theme.Warning;
+            if (statusDot != null) statusDot.Invalidate();
+        }
+
+        void ShowNotice(string message, bool error) { notice.Text = message; notice.ForeColor = error ? Theme.Danger : muted; }
 
         void PopulatePreview()
         {
@@ -579,7 +638,7 @@ namespace NetworkRecovery
             networks.Items.Add(new WifiNetwork { Ssid = "Office Wi-Fi", ProfileName = "Office Wi-Fi", Security = "WPA2-Personal", HasSavedProfile = true, IsConnected = true, IsSupportedPersonal = true, Signal = 92 });
             networks.SelectedIndex = 0; loading = false;
             adapterInfo.Text = demo.Description; NetworkChanged();
-            status.Text = "●  尚未啟用 · 完成設定後即可開始保護";
+            SetStatus("尚未啟用 · 完成設定後即可開始保護");
         }
     }
 }

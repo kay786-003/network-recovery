@@ -18,14 +18,19 @@ namespace NetworkRecovery
         private readonly ToolStripMenuItem status = new ToolStripMenuItem("等待監控回報") { Enabled = false };
         public TrayContext()
         {
-            ContextMenuStrip menu = new ContextMenuStrip();
+            ContextMenuStrip menu = new ContextMenuStrip { Renderer = new MenuRenderer(), Font = Theme.Font(9.5F, false), ShowCheckMargin = false, ShowImageMargin = true,
+                ImageScalingSize = new Size(Theme.S(16), Theme.S(16)), Padding = new Padding(0, Theme.S(4), 0, Theme.S(4)) };
+            int glyph = Theme.S(16);
+            status.Tag = "header"; status.Font = Theme.Font(9.5F, true); status.Image = Theme.DotImage(Theme.Neutral, glyph);
             menu.Items.Add(status); menu.Items.Add(new ToolStripSeparator());
             pauses = TrayPauseMenu.Create(async delegate(int duration) { await Run(delegate { MonitorControl.TogglePause(duration); }); });
             menu.Items.AddRange(pauses);
+            menu.Items.Add(new ToolStripSeparator());
             menu.Opening += delegate { RefreshPauseChecks(); };
-            menu.Items.Add("監控工具", null, delegate { ShowTools(); });
-            menu.Items.Add("開啟設定", null, delegate { OpenSettings(); });
-            menu.Items.Add("關閉系統匣（監控繼續）", null, delegate {
+            menu.Items.Add("監控工具", Theme.GlyphImage('', Theme.Ink, glyph), delegate { ShowTools(); });
+            menu.Items.Add("開啟設定", Theme.GlyphImage('', Theme.Ink, glyph), delegate { OpenSettings(); });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("關閉系統匣（監控繼續）", Theme.GlyphImage('', Theme.Ink, glyph), delegate {
                 if (toolsWindow != null && !toolsWindow.IsDisposed && toolsWindow.IsBusy)
                     MessageBox.Show("網路操作進行中，請完成後再關閉系統匣。", "Network Recovery");
                 else ExitThread();
@@ -67,11 +72,15 @@ namespace NetworkRecovery
                 string text = await Task.Run<string>(delegate { return AppInstaller.GetStatus(); });
                 if (disposed) return;
                 RefreshPauseChecks();
-                status.Text = text; icon.Text = "Network Recovery · " + text;
+                status.Text = text; icon.Text = Truncate("Network Recovery · " + text);
                 icon.Icon = AppIcons.ForStatus(text);
+                Color tone = icon.Icon == AppIcons.Enabled ? Theme.Success : icon.Icon == AppIcons.Disabled ? Theme.Neutral : Theme.Warning;
+                Image old = status.Image; status.Image = Theme.DotImage(tone, Theme.S(16)); if (old != null) old.Dispose();
             }
             finally { updating = false; }
         }
+        // NotifyIcon tooltips are limited to 63 characters.
+        private static string Truncate(string text) { return text.Length <= 63 ? text : text.Substring(0, 62) + "…"; }
         private void RefreshPauseChecks()
         {
             try

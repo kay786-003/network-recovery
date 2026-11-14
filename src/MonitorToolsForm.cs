@@ -18,34 +18,36 @@ namespace NetworkRecovery
             demo = demoMode;
             Text = "監控工具";
             Icon = AppIcons.Application;
-            Font = Theme.Font(9F, false);
-            BackColor = Theme.Background; ForeColor = Theme.Ink;
+            Font = Theme.Font(9.5F, false);
+            Theme.ApplyWindow(this);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(Theme.S(560), Theme.S(520));
+            ClientSize = new Size(Theme.S(560), Theme.S(600));
             MinimumSize = new Size(Theme.S(360), Theme.S(300));
             AutoScroll = true;
             // Docked to the top and auto-sized: narrow windows reflow text and only then scroll vertically.
             TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                ColumnCount = 1, Padding = new Padding(Theme.S(22), Theme.S(18), Theme.S(22), Theme.S(18)) };
+                ColumnCount = 1, Padding = new Padding(Theme.S(24), Theme.S(22), Theme.S(24), Theme.S(22)) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            Label title = new Label { Text = "監控工具", AutoSize = true, Font = Theme.Font(13F, true), ForeColor = Theme.Ink, Margin = new Padding(0, 0, 0, Theme.S(6)) };
+            Label title = new Label { Text = "監控工具", AutoSize = true, Font = Theme.Font(15F, true), ForeColor = Theme.Ink, Margin = new Padding(0, 0, 0, Theme.S(4)) };
             layout.Controls.Add(title);
-            status.ForeColor = Theme.Muted; status.Dock = DockStyle.Fill; status.Margin = new Padding(0, 0, 0, Theme.S(14));
+            status.ForeColor = Theme.Muted; status.Dock = DockStyle.Fill; status.Margin = new Padding(0, 0, 0, Theme.S(18));
             layout.Controls.Add(status);
             actions.AutoSize = true; actions.AutoSizeMode = AutoSizeMode.GrowAndShrink; actions.ColumnCount = 1; actions.Dock = DockStyle.Fill; actions.Margin = Padding.Empty;
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             layout.Controls.Add(actions);
-            Add("備份", 0, Backup);
-            Add("還原備份", 0, Restore);
-            Add("一鍵修復並重設", 2, Repair);
-            Add("移除備份", 0, async delegate {
+            Add("備份", "保存目前的 Proxy、Winsock 與 IP 設定，不覆寫既有備份。", '\uE74E', 0, Backup);
+            Add("還原備份", "以本機備份還原網路設定，完成後需重新啟動。", '\uE777', 0, Restore);
+            Add("一鍵修復並重設", "清除 DNS、修復網卡並重設 Proxy／Winsock／TCP/IP。", '\uE90F', 2, Repair);
+            Add("移除備份", "刪除本機備份，之後無法再用它還原。", '\uE74D', 0, async delegate {
                 if (Confirm("移除後將無法用此備份還原。確定移除？"))
                     await Execute(delegate { using (ActionLease lease = new ActionLease(1000)) ManualRepair.DiscardBackup(); });
             });
-            Card warning = new Card(new Padding(Theme.S(18), Theme.S(12), Theme.S(18), Theme.S(12)), Theme.Warning) { AutoSize = true, Margin = new Padding(0, Theme.S(6), 0, 0) };
+            Card warning = new Card(new Padding(Theme.S(20), Theme.S(14), Theme.S(18), Theme.S(14)), Theme.Warning) { AutoSize = true, Margin = new Padding(0, Theme.S(8), 0, 0) };
             WrapLabel note = new WrapLabel { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Margin = Padding.Empty, Text =
                 "備份只留在這台電腦，不會覆寫既有備份。\n修復會短暫斷線，並重設 Proxy、Winsock 與 TCP/IP，可能影響 VPN、固定 IP 與公司代理。完成後請自行重新啟動電腦。" };
-            warning.Controls.Add(note);
+            warning.RowCount = 1; warning.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            warning.Controls.Add(note, 0, 0);
+            warning.AddSpacerRow();
             layout.Controls.Add(warning);
             Controls.Add(layout);
             Shown += delegate { status.Text = demo ? "網路設定備份與修復（示範）" : "備份與還原只處理這台電腦的網路設定。"; };
@@ -60,13 +62,15 @@ namespace NetworkRecovery
             Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
             Location = new Point(area.Left + (area.Width - Width) / 2, area.Top + (area.Height - Height) / 2);
             base.OnLoad(e);
-        }        // kind: 0 normal, 2 caution (amber) for the action that resets network settings.
-        private void Add(string text, int kind, Func<Task> action)
+        }
+        // Each action is a full-width row with an icon, its name and a one-line explanation.
+        private void Add(string text, string description, char glyph, int kind, Func<Task> action)
         {
-            Button button = new Button { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, Theme.S(10)), TextAlign = ContentAlignment.MiddleLeft };
+            ActionTile button = new ActionTile { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Glyph = glyph, Description = description };
             Theme.StyleButton(button, text, kind);
-            button.AutoSizeMode = AutoSizeMode.GrowOnly; button.MinimumSize = new Size(0, Theme.S(46)); button.Margin = new Padding(0, 0, 0, Theme.S(10));
-            button.Padding = new Padding(Theme.S(18), Theme.S(4), Theme.S(18), Theme.S(4));
+            button.Font = Theme.Font(10F, true);
+            button.MinimumSize = new Size(0, Theme.S(64)); button.Margin = new Padding(0, 0, 0, Theme.S(8));
+            button.Padding = new Padding(Theme.S(14), Theme.S(4), Theme.S(18), Theme.S(4));
             button.Click += async delegate { if (!demo && !busy) await action(); };
             actions.Controls.Add(button);
         }
