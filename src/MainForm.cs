@@ -36,6 +36,9 @@ namespace NetworkRecovery
         readonly CheckBox showPassword = new PlainCheckBox();
         readonly CheckBox replacePassword = new PlainCheckBox();
         readonly CheckBox countryGuard = new PlainCheckBox();
+        readonly Label guardTargets = new WrapLabel();
+        readonly Button pickProcesses = new ThemedButton { Glyph = '' };
+        string[] guardNames = (string[])CountryProcessGuard.LegacyNames.Clone();
         readonly TextBox password = new TextBox();
         InputFrame passwordFrame;
         readonly Label passwordLabel = new Label();
@@ -86,6 +89,7 @@ namespace NetworkRecovery
             replacePassword.CheckedChanged += delegate { password.Clear(); UpdateWifiControls(); if (password.Visible) password.Focus(); };
             refreshAdapters.Click += delegate { LoadAdapters(); };
             refreshWifi.Click += async delegate { await LoadNetworks(true); };
+            pickProcesses.Click += delegate { PickProcesses(); };
             start.Click += async delegate { await EnableMonitoring(); };
             stop.Click += async delegate { await StopMonitoring(); };
             statusTimer.Interval = 5000;
@@ -96,6 +100,7 @@ namespace NetworkRecovery
                 try { saved = AppInstaller.LoadConfig(); }
                 catch (Exception ex) { ShowNotice(ex.Message, true); }
                 countryGuard.Checked = saved != null && saved.CountryProcessGuard;
+                guardNames = CountryProcessGuard.EffectiveNames(saved); UpdateGuardTargets();
                 LoadAdapters(); RefreshStatus(); statusTimer.Start();
             };
             FormClosed += delegate { statusTimer.Stop(); statusTimer.Dispose(); password.Clear(); };
@@ -129,7 +134,7 @@ namespace NetworkRecovery
             if (!layoutReady) return;
             int available = ClientSize.Width + (VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
             bool wide = available >= S(900);
-            Size minimum = wide ? new Size(S(860), S(960)) : new Size(S(420), S(1400));
+            Size minimum = wide ? new Size(S(860), S(1010)) : new Size(S(420), S(1460));
             SuspendLayout();
             content.SuspendLayout();
             if (wide != wideLayout) ApplyBodyMode(wide);
@@ -176,7 +181,7 @@ namespace NetworkRecovery
             if (linkPanel == null || footerPanel == null || flowCard == null) return;
             if (linkPanel.Parent != null) linkPanel.Parent.Controls.Remove(linkPanel);
             if (wide) { linkPanel.Margin = Padding.Empty; footerPanel.Controls.Add(linkPanel, 0, 1); }
-            else { linkPanel.Margin = new Padding(0, S(10), 0, 0); flowCard.Controls.Add(linkPanel, 0, 6); }
+            else { linkPanel.Margin = new Padding(0, S(10), 0, 0); flowCard.Controls.Add(linkPanel, 0, 7); }
         }
 
         void FitAdapterColumns()
@@ -277,8 +282,8 @@ namespace NetworkRecovery
 
             // Protection flow summary and the optional country guard.
             Card flow = new Card(new Padding(S(20), S(16), S(20), S(16)), Color.Empty) { AutoSize = true, Margin = new Padding(0, S(12), 0, S(14)) };
-            flow.RowCount = 7;
-            for (int i = 0; i < 7; i++) flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            flow.RowCount = 8;
+            for (int i = 0; i < 8; i++) flow.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Label flowTitle = Para("自動保護流程", 9F, muted, true); flowTitle.Margin = new Padding(0, 0, 0, S(10));
             flow.Controls.Add(flowTitle, 0, 0);
             StepFlow steps = new StepFlow { Steps = new[] { "斷網 3 分鐘", "修復網卡", "再等 60 秒", "重新啟動電腦" }, Dock = DockStyle.Fill,
@@ -291,9 +296,18 @@ namespace NetworkRecovery
             countryGuard.Text = "啟用地區程序保護";
             countryGuard.Margin = new Padding(0, 0, 0, S(2));
             flow.Controls.Add(countryGuard, 0, 4);
-            Label guardNote = Para("每 120 秒查詢外網 IP 地區；CN／MO／HK 時強制關閉 claude、cowork-svc，未儲存內容可能遺失。", 9F, muted, false);
+            Label guardNote = Para("每 120 秒查詢外網 IP 地區；CN／MO／HK 時強制結束下列程序，未儲存內容可能遺失。", 9F, muted, false);
             guardNote.Margin = new Padding(S(28), 0, 0, 0);
             flow.Controls.Add(guardNote, 0, 5);
+            TableLayoutPanel targets = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = new Padding(S(28), S(10), 0, 0) };
+            targets.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F)); targets.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            guardTargets.Dock = DockStyle.Fill; guardTargets.ForeColor = ink; guardTargets.Margin = new Padding(0, 0, S(10), 0);
+            guardTargets.Font = Theme.Font(9F, false); guardTargets.TextAlign = ContentAlignment.MiddleLeft;
+            targets.Controls.Add(guardTargets, 0, 0);
+            StyleButton(pickProcesses, "選擇程序", false); pickProcesses.Anchor = AnchorStyles.Right;
+            targets.Controls.Add(pickProcesses, 1, 0);
+            flow.Controls.Add(targets, 0, 6);
+            UpdateGuardTargets();
             flow.AddSpacerRow();
             root.Controls.Add(flow, 0, 3);
 
@@ -558,6 +572,7 @@ namespace NetworkRecovery
             password.Enabled = showPassword.Enabled = needsPassword && !busy;
             autoConnect.Visible = wireless && reconnect.Checked;
             countryGuard.Enabled = !busy;
+            pickProcesses.Enabled = !busy;
             start.Enabled = !busy && adapter != null;
         }
 
@@ -570,12 +585,13 @@ namespace NetworkRecovery
             if (useWifi && wifi == null) { ShowNotice("請先選擇要自動重連的 Wi-Fi。", true); return; }
             if (useWifi && !wifi.HasSavedProfile && !wifi.IsOpen && !wifi.IsSupportedPersonal) { ShowNotice("請先使用 Windows 完成這個 Wi-Fi 的驗證，再重新整理清單。", true); return; }
             if (useWifi && (!wifi.HasSavedProfile || replacePassword.Checked) && !wifi.IsOpen && String.IsNullOrEmpty(password.Text)) { ShowNotice("請輸入 Wi-Fi 密碼。", true); password.Focus(); return; }
+            if (countryGuard.Checked && guardNames.Length == 0) { ShowNotice("已啟用地區程序保護，請先按「選擇程序」選擇至少一個要結束的程序。", true); return; }
             string enteredPassword = password.Visible ? password.Text : "";
             busy = true; networkRequest++; adapters.Enabled = false; refreshAdapters.Enabled = false; stop.Enabled = false; UpdateWifiControls(); start.Text = "正在啟用…";
             ShowNotice("正在儲存設定並啟用背景監控…", false);
             try
             {
-                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi, WifiSsidHex = useWifi ? wifi.SsidHex : "", CountryProcessGuard = countryGuard.Checked };
+                AppConfig config = new AppConfig { AdapterId = adapter.Id, AdapterName = adapter.Name, ReconnectWifi = useWifi, WifiSsidHex = useWifi ? wifi.SsidHex : "", CountryProcessGuard = countryGuard.Checked, GuardProcessNames = (string[])guardNames.Clone() };
                 await Task.Run(delegate {
                     using (ActionLease action = new ActionLease(1000))
                     {
@@ -621,6 +637,26 @@ namespace NetworkRecovery
             statusTone = text.StartsWith("無法", StringComparison.Ordinal) ? Theme.Danger :
                 icon == AppIcons.Enabled ? Theme.Success : icon == AppIcons.Disabled || text.StartsWith("尚未", StringComparison.Ordinal) ? Theme.Neutral : Theme.Warning;
             if (statusDot != null) statusDot.Invalidate();
+        }
+
+        void UpdateGuardTargets()
+        {
+            if (guardNames.Length == 0) { guardTargets.Text = "尚未選擇要結束的程序。"; return; }
+            string shown = String.Join("、", guardNames.Take(8).Select(n => n + ".exe"));
+            guardTargets.Text = "要結束的程序：" + shown + (guardNames.Length > 8 ? " 等 " + guardNames.Length + " 個" : "");
+        }
+
+        // Names only are kept; the picker reads the live process list each time it opens.
+        void PickProcesses()
+        {
+            if (busy) return;
+            using (ProcessPickerForm picker = new ProcessPickerForm(preview, guardNames))
+            {
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+                guardNames = picker.SelectedNames;
+            }
+            UpdateGuardTargets();
+            ShowNotice("已更新要結束的程序；按「儲存並啟用」後生效。", false);
         }
 
         void ShowNotice(string message, bool error) { notice.Text = message; notice.ForeColor = error ? Theme.Danger : muted; }

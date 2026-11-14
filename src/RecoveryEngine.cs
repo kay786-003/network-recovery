@@ -43,7 +43,7 @@ namespace NetworkRecovery
                 throw new InvalidDataException("Missing or invalid monitor configuration.");
             string bootId = BootClock.Id;
             if (config.CountryProcessGuard) ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            var countryGuard = new CountryProcessGuard(CountryProcessGuard.LookupAsync,
+            var countryGuard = new CountryProcessGuard(CountryProcessGuard.LookupAsync, CountryProcessGuard.EffectiveNames(config),
                 delegate(string name) { CountryProcessGuard.StopNamedProcesses(name, WriteLog); }, WriteLog);
             double graceEnd = StartupPolicy.GraceDeadline(BootClock.Seconds, config.StartupGraceSeconds);
             double? failureSince = null, repairedAt = null;

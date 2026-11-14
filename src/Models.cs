@@ -13,6 +13,8 @@ namespace NetworkRecovery
         public string WifiSsidHex = "";
         public bool ReconnectWifi;
         public bool CountryProcessGuard;
+        // Process names only (no paths, no ".exe"); null means a pre-0.2.5 config and keeps the original two names.
+        public string[] GuardProcessNames;
         public int OfflineSeconds = 180;
         public int RepairSeconds = 60;
         public int StartupGraceSeconds = 300;

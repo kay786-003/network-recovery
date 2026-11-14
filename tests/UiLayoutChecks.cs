@@ -96,6 +96,7 @@ class UiLayoutChecks
             }
             form.Close();
         }
+        CheckPicker();
         using (MonitorToolsForm form = new MonitorToolsForm(true))
         {
             form.Show(); Application.DoEvents();
@@ -111,6 +112,36 @@ class UiLayoutChecks
             Console.WriteLine("Demo tools preview: " + preview);
             foreach (int[] s in new[] { new[]{900,700}, new[]{560,520}, new[]{420,400}, new[]{360,300} })
             { form.ClientSize = new Size(s[0], s[1]); Application.DoEvents(); Application.DoEvents(); CheckTools(form); CheckAll(form.Controls[0]); }
+            form.Close();
+        }
+    }
+    // Demo process list only; the picker never enumerates real processes in demo mode.
+    static void CheckPicker()
+    {
+        Type type = typeof(MainForm).Assembly.GetType("NetworkRecovery.ProcessPickerForm");
+        using (Form form = (Form)Activator.CreateInstance(type, BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { true, new[] { "claude", "cowork-svc", "OldTool" } }, null))
+        {
+            form.Show(); Application.DoEvents(); Application.DoEvents();
+            ListView list = (ListView)type.GetField("list", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+            Check(list.Items.Count == 7, "Demo picker lists six running processes plus the selected one that is not running.");
+            Check(list.Items["claude"].Checked && list.Items["cowork-svc"].Checked && list.Items["OldTool"].Checked && !list.Items["chrome"].Checked, "Saved names start checked.");
+            Check(list.Items["OldTool"].SubItems[1].Text == "未執行", "Selected but stopped program is marked.");
+            list.Items["chrome"].Checked = true; list.Items["OldTool"].Checked = false;
+            string[] names = (string[])type.GetProperty("SelectedNames", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form, null);
+            Check(String.Join(",", names) == "chrome,claude,cowork-svc", "Picker returns bare names only.");
+            TextBox search = (TextBox)type.GetField("search", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+            search.Text = "studio"; Application.DoEvents();
+            Check(list.Items.Count == 1 && list.Items[0].Name == "Code", "Search matches description.");
+            search.Text = ""; Application.DoEvents();
+            if (Theme.Scale == 1.0F)
+            {
+                string preview = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "process-picker-preview.png");
+                using (Bitmap bitmap = new Bitmap(form.Width, form.Height))
+                { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(preview); }
+                Console.WriteLine("Demo process picker preview: " + preview);
+            }
+            foreach (int[] s in new[] { new[]{640,620}, new[]{900,700}, new[]{420,440} })
+            { form.ClientSize = new Size((int)(s[0] * Theme.Scale), (int)(s[1] * Theme.Scale)); Application.DoEvents(); Application.DoEvents(); CheckAll(form.Controls[0]); }
             form.Close();
         }
     }
