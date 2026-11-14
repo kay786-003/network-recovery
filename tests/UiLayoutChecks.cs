@@ -140,7 +140,11 @@ class UiLayoutChecks
                 { form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size)); bitmap.Save(preview); }
                 Console.WriteLine("Demo process picker preview: " + preview);
             }
-            foreach (int[] s in new[] { new[]{640,620}, new[]{900,700}, new[]{420,440} })
+            foreach (int[] s in new[] { new[]{640,620}, new[]{900,700}, new[]{420,440}, new[]{360,300}, new[]{300,240} })
+            { form.ClientSize = new Size((int)(s[0] * Theme.Scale), (int)(s[1] * Theme.Scale)); Application.DoEvents(); Application.DoEvents(); CheckAll(form.Controls[0]); }
+            // Taller-wrapping text (other fonts, long errors) must push the list down rather than overlap it.
+            ((Label)type.GetField("summary", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form)).Text = new string('測', 300);
+            foreach (int[] s in new[] { new[]{640,620}, new[]{360,300} })
             { form.ClientSize = new Size((int)(s[0] * Theme.Scale), (int)(s[1] * Theme.Scale)); Application.DoEvents(); Application.DoEvents(); CheckAll(form.Controls[0]); }
             form.Close();
         }

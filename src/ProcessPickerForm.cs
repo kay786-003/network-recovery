@@ -32,6 +32,7 @@ namespace NetworkRecovery
         readonly Button ok = new ThemedButton { Glyph = '' };
         readonly Button cancel = new ThemedButton();
         readonly Timer timer = new Timer();
+        readonly TableLayoutPanel layout;
         List<RunningProcess> snapshot = new List<RunningProcess>();
         string signature = "";
         bool loading, refreshing;
@@ -47,11 +48,13 @@ namespace NetworkRecovery
             Theme.ApplyWindow(this);
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(Theme.S(640), Theme.S(620));
-            MinimumSize = new Size(Theme.S(420), Theme.S(440));
+            MinimumSize = new Size(Theme.S(320), Theme.S(260));
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false; MinimizeBox = false;
 
-            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6,
+            // Fills the window but never shrinks below a usable height; smaller windows scroll instead of overlapping.
+            AutoScroll = true;
+            layout = new TableLayoutPanel { Location = Point.Empty, ColumnCount = 1, RowCount = 6,
                 Padding = new Padding(Theme.S(24), Theme.S(20), Theme.S(24), Theme.S(20)) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             for (int i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, 100F));
@@ -91,9 +94,11 @@ namespace NetworkRecovery
             layout.Controls.Add(footer, 0, 5);
             Controls.Add(layout);
             CancelButton = cancel;
+            FitLayout();
             ResumeLayout(true);
 
             list.SizeChanged += delegate { FitColumns(); };
+            summary.TextChanged += delegate { FitLayout(); };
             list.ItemChecked += delegate(object sender, ItemCheckedEventArgs e) { if (!loading) Toggle(e.Item); };
             search.TextChanged += delegate { Render(); };
             search.HandleCreated += delegate { SendMessage(search.Handle, 0x1501, (IntPtr)1, "搜尋名稱或描述"); };
@@ -116,6 +121,26 @@ namespace NetworkRecovery
             Rectangle area = Screen.FromControl(this).WorkingArea;
             Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
             base.OnLoad(e);
+        }
+
+        protected override void OnClientSizeChanged(EventArgs e)
+        {
+            base.OnClientSizeChanged(e);
+            FitLayout();
+        }
+
+        void FitLayout()
+        {
+            if (layout == null) return;
+            Point scroll = AutoScrollPosition;
+            int width = Math.Max(Theme.S(320), ClientSize.Width);
+            // Minimum height comes from the measured text, so other fonts or scales still cannot squeeze rows together.
+            int inner = width - layout.Padding.Horizontal, need = layout.Padding.Vertical + Theme.S(8);
+            foreach (Control child in layout.Controls)
+                need += child.Margin.Vertical + (child == list ? list.MinimumSize.Height :
+                    child.GetPreferredSize(new Size(Math.Max(1, inner - child.Margin.Horizontal), 0)).Height);
+            int height = Math.Max(need, ClientSize.Height);
+            layout.SetBounds(scroll.X, scroll.Y, width, height);
         }
 
         void FitColumns()
@@ -147,6 +172,7 @@ namespace NetworkRecovery
             if (selected.Count == 0) { summary.Text = "尚未選擇程序。"; return; }
             var names = selected.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).Select(n => n + ".exe").ToList();
             summary.Text = "已選擇 " + names.Count + " 個：" + String.Join("、", names.Take(10)) + (names.Count > 10 ? "…" : "");
+            FitLayout();
         }
 
         async Task RefreshList()
